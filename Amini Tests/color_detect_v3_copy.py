@@ -1,15 +1,13 @@
-#!/usr/bin/env python3
-
-print('Please run under desktop environment (eg: vnc) to display the image window')
-
 import cv2
-from picamera2 import Picamera2
 import numpy as np
 import time
 
 color_dict = {'red':[0,4],'orange':[5,18],'yellow':[22,37],'green':[42,85],'blue':[92,110],'purple':[115,165],'red_2':[165,180]}  #Here is the range of H in the HSV color space represented by the color
 
 kernel_5 = np.ones((5,5),np.uint8) #Define a 5×5 convolution kernel with element values of all 1.
+
+cv2.namedWindow("Test")
+cam = cv2.VideoCapture(0)
 
 def color_detect(img,color_name):
 
@@ -53,27 +51,16 @@ def color_detect(img,color_name):
 
     return img,mask,morphologyEx_img
 
-with Picamera2() as camera:
-    print("start color detect")
 
-    camera.preview_configuration.main.size = (160, 120)
-    camera.preview_configuration.main.format = "RGB888"
-    camera.preview_configuration.align()
-    camera.configure("preview")
-    camera.start()
+while True:
+    ret, img = cam.read()
+    img,img_2,img_3 =  color_detect(img,'red')  # Color detection function
+    cv2.imshow("video", img)    # OpenCV image show
+    cv2.imshow("mask", img_2)    # OpenCV image show
+    cv2.imshow("morphologyEx_img", img_3)    # OpenCV image show
 
-    while True:
-        img = camera.capture_array() #frame.array
-        img,img_2,img_3 =  color_detect(img,'red')  # Color detection function
-        cv2.imshow("video", img)    # OpenCV image show
-        cv2.imshow("mask", img_2)    # OpenCV image show
-        cv2.imshow("morphologyEx_img", img_3)    # OpenCV image show
-    
-        k = cv2.waitKey(1) & 0xFF
-        # 27 is the ESC key, which means that if you press the ESC key to exit
-        if k == 27:
-            break
-
-    print('quit ...') 
-    cv2.destroyAllWindows()
-    camera.close()  
+    k = cv2.waitKey(1) & 0xFF
+    # 27 is the ESC key, which means that if you press the ESC key to exit
+    # Press 'q' to exit the loop
+    if cv2.waitKey(1) == ord('q'):
+        break
