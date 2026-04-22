@@ -6,7 +6,6 @@ print('Please run under desktop environment (eg: vnc) to display the image windo
 import cv2
 from picamera2 import Picamera2
 import numpy as np
-import time
 
 kernel_5 = np.ones((5,5),np.uint8) #Define a 5×5 convolution kernel with element values of all 1.
 

@@ -16,10 +16,8 @@ out = cv2.VideoWriter('output.mp4', fourcc, 20.0, (frame_width, frame_height))
 while True:
     ret, frame = cam.read()
     out.write(frame) # Write the frame to the output file
-
-    #frame = camera.capture_array() #frame.array
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) #turn grayscale
-    blur = cv2.GaussianBlur(gray, (5, 5), 1.4) #removing noise -- increasing the last number increases blur
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)          # Turn grayscale
+    blur = cv2.GaussianBlur(gray, (5, 5), 1.4)              # Removing noise -- increasing the last number increases blur
     edges = cv2.Canny(blur, threshold1=100, threshold2=200) # Apply Canny Edge Detector -- default is 100-200
 
     cv2.imshow("video", edges)    # OpenCV image show
