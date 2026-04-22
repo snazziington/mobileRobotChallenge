@@ -51,7 +51,7 @@ with Picamera2() as camera:
             # Comment out for actual challenge to reduce processing
             for y, x in coords:
                 cv2.circle(cropped, (x, y), 5, 128, -1)
-
+ 
         cv2.imshow("video", edges)    # OpenCV image show
     
         k = cv2.waitKey(1) & 0xFF

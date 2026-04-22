@@ -9,13 +9,9 @@ cam = cv2.VideoCapture(1)
 frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
 frame_height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-# Define the codec and create VideoWriter object
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('output.mp4', fourcc, 20.0, (frame_width, frame_height))
 
 while True:
     ret, frame = cam.read()
-    out.write(frame) # Write the frame to the output file
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)          # Turn grayscale
     blur = cv2.GaussianBlur(gray, (5, 5), 1.4)              # Removing noise -- increasing the last number increases blur
     edges = cv2.Canny(blur, threshold1=100, threshold2=200) # Apply Canny Edge Detector -- default is 100-200
@@ -28,5 +24,4 @@ while True:
 
 # Release the capture and writer objects
 cam.release()
-out.release()
 cv2.destroyAllWindows()
