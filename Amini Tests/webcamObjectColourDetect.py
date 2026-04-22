@@ -1,11 +1,17 @@
-#!/usr/bin/env python3
-
-print('Please run under desktop environment (eg: vnc) to display the image window')
-
 import cv2
-from picamera2 import Picamera2
 import numpy as np
 import time
+
+windowTitle = "Object Colour Detect"
+
+cv2.namedWindow(windowTitle)
+cam = cv2.VideoCapture(0)
+
+width  = cam.get(3) 
+height = cam.get(4)
+
+print(width)
+print(height)
 
 # Range of H (hue) in the HSV color space represented by the color
     # Hue ranges from 0 to 180
@@ -75,36 +81,21 @@ def color_detect(img, color_name):
 
     return img, mask, morphologyEx_img
 
-with cv2.VideoCapture(0) as camera:
-    print("start color detect")
+while True: # loops indefinitely until "return" or "break"
+        ret, img = cam.read()
+        
+        #Flips the frame to be the right orientation
+        img = cv2.flip(img,1)
 
-    # Initialising camera
-    camera.preview_configuration.main.size = (resizedDimensions)
-    camera.preview_configuration.main.format = "RGB888"
-    camera.preview_configuration.align()
-    camera.configure("preview")
-    camera.start()
-
-    # TODO: Write out
-    """
-    For the first 60 seconds, look at the background and "memorise" it.
-    When something new appears, memorise the colours within a certain range (range of hsl)
-    Create a white mask of the object and render it
-    """
-
-    while True: # loops indefinitely until "return" or "break"
-        img = camera.capture_array() # frame.array
         img, img_2, img_3 = color_detect(img, 'red') # img 1, 2 and 3 are "img", "mask", and "morphologyEx_img" respectively
         cv2.imshow("video", img)    # OpenCV image show
         cv2.imshow("mask", img_2)   # OpenCV image show
         cv2.imshow("morphologyEx_img", img_3)    # OpenCV image show
     
-        k = cv2.waitKey(1) & 0xFF
-        # 27 is the ESC key, which means that if you press the ESC key to exit
-        if k == 27:
+        if cv2.waitKey(1) == ord('q'):
             break
-
-    # Only executes these commands once the loop is broken by pressing ESC key
-    print('quit ...') 
-    cv2.destroyAllWindows()
-    camera.close()  
+        
+    # TODO: Write out
+    #For the first 60 seconds, look at the background and "memorise" it.
+    #When something new appears, memorise the colours within a certain range (range of hsl)
+    #Create a white mask of the object and render it
