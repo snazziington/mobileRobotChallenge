@@ -3,7 +3,7 @@ import time
 import numpy as np
 
 # Open the default camera
-cam = cv2.VideoCapture(1)
+cam = cv2.VideoCapture(0)
 
 # Get the default frame width and height
 frame_width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))

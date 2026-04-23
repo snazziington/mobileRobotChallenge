@@ -9,7 +9,7 @@ kernel = np.ones((kernelSize, kernelSize), np.uint8) #Define a kernelSize x kern
 valueLow = 20
 
 cv2.namedWindow("Test")
-cam = cv2.VideoCapture(1)
+cam = cv2.VideoCapture(0)
 
 def color_detect(img, color_name):
 

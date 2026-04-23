@@ -21,7 +21,7 @@ else:
     backSub = cv2.createBackgroundSubtractorKNN()
 """
 # endregion
-capture = cv2.VideoCapture(1)
+capture = cv2.VideoCapture(0)
 width = capture.get(3)
 height = capture.get(4)
 

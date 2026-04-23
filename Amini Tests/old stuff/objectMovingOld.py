@@ -9,7 +9,7 @@ import argparse
 # Then aim to follow that specific object via edge-detection maybe
 
 # region Uncomment this if you want to see the "fgMask" wayy below
-"""parser = argparse.ArgumentParser(description='This program shows how to use background subtraction methods provided by \
+parser = argparse.ArgumentParser(description='This program shows how to use background subtraction methods provided by \
                                               Opencv2. You can process both videos and images.')
 parser.add_argument('--input', type=str, help='Path to a video or a sequence of image.', default='vtest.avi')
 parser.add_argument('--algo', type=str, help='Background subtraction method (KNN, MOG2).', default='MOG2')
@@ -19,10 +19,10 @@ if args.algo == 'MOG2':
     backSub = cv2.createBackgroundSubtractorMOG2()
 else:
     backSub = cv2.createBackgroundSubtractorKNN()
-"""
+
 # endregion
 
-capture = cv2.VideoCapture(1)
+capture = cv2.VideoCapture(0)
 color_dict = {'red':[0,4],'orange':[5,18],'yellow':[22,37],'green':[42,85],'blue':[92,110],'purple':[115,165],'red_2':[165,180]}  #Here is the range of H in the HSV color space represented by the color
 
 kernelSize = 20
@@ -115,8 +115,8 @@ while True:
     masked = cv2.bitwise_and(frame_blurred, frame_blurred, mask=thresh)
     cv2.imshow("masked", masked)
     # This highlights the difference between subsequent frames
-    #fgMask = backSub.apply(frame)
-    #cv2.imshow('FG Mask', fgMask)
+    fgMask = backSub.apply(frame)
+    cv2.imshow('FG Mask', fgMask)
 
     keyboard = cv2.waitKey(30)
     if keyboard == 'q' or keyboard == 27:
