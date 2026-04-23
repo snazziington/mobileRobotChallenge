@@ -29,7 +29,7 @@ def floorMasker(frame, width, height):
 windowTitle = "Basic Segmentation"
 
 cv2.namedWindow(windowTitle)
-cam = cv2.VideoCapture(1)
+cam = cv2.VideoCapture(0)
 
 width  = cam.get(3) 
 height = cam.get(4)
