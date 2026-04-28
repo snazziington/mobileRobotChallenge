@@ -3,7 +3,7 @@ import numpy as np
 import argparse
 import time
 
-# NOTE: All comments with "##" is for resizing the camera.
+# NOTE: All comments with "##" are for resizing the camera.
     # If you do want the camera to be resized, uncomment all that code
 
 # TODO
