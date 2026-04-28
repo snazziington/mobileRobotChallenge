@@ -45,7 +45,7 @@ resizeFactor = 2 # Camera resolution is divided by this number
 ##width = int(width / resizeFactor); height = int(height / resizeFactor)
 ##resizedDimensions = (width, height)
 horizon = int(height * 0.4)
-centerHorizon = [int(width / 2), int(horizon * 1.5)]
+centerFloor = [int(width / 2), int(horizon * 1.5)]
 
 # Captures first background image
 ret_bg, background = capture.read()
@@ -139,7 +139,7 @@ while True:
                 cv2.drawContours(frame, i, -1, green, 1)
 
                 # Calculate its distance to the center of the floor
-                centerDis = (abs(centerHorizon[0] - centerX) + abs(centerHorizon[1] - centerY))
+                centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
 
                 # Find the contour with the centre-most dimensions, and save them into the global variables
                 if (centerDis < lowestDis):
@@ -287,7 +287,7 @@ while True:
                         centerY = y + int((h / 2))
 
     # Places circle on the center floor area
-    cv2.circle(frame, (centerHorizon[0], centerHorizon[1]), 2, (0, 0, 0), -1) 
+    cv2.circle(frame, (centerFloor[0], centerFloor[1]), 2, (0, 0, 0), -1) 
 
     # Maintains a rectangle around the last known position of object
     if found_an_object == True:
