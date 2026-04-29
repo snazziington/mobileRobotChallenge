@@ -4,7 +4,7 @@ import numpy as np
 windowTitle = "Background Removal"
 
 cv2.namedWindow(windowTitle)
-cam = cv2.VideoCapture(0)
+cam = cv2.VideoCapture(2)
 
 # Creates the background subtractor
 fgBg = cv2.createBackgroundSubtractorMOG2(history=100, detectShadows=False)

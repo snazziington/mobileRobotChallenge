@@ -6,13 +6,10 @@ import time
 # TODO
     # Maybe it should wait until the object has been "still" for 3 seconds before it is locked in as the object?
 
-# TODO: Filter out contours that are too big
-
 # ==Colours==
 red = (0, 0, 255)
 green = (0, 255, 0)
 white = (255, 255, 255)
-magenta = (255, 0, 255)
 blue = (255, 0, 0)
 black = (0, 0, 0)
 
@@ -26,7 +23,7 @@ blurArea = (15, 15)
 
 # ==Object Following Variables==
 # size of edge margin for the object view
-margin = 400 # bigger means code can find object if the "eye" gets lost
+margin = 100 # bigger means code can find object if the "eye" gets lost
              # smaller means less distractions, but it could lose the object
 
 # how quickly the position and size of the object updates (0 < speed =< 1)
@@ -61,7 +58,7 @@ threshold_diff_value_object = 20 # currently commented out
 
 interval_bg = 0.01 # how often the background image is updated (in seconds)
 interval_diff_bg = 0.01 # currently commented out
-interval_wait_for_object = 0.2 # length of time to wait for an object to be placed
+interval_wait_for_object = 2 # length of time to wait for an object to be placed
 interval_obj_id = 3 # how long an object should be in frame before it is IDed as the object
 
 # ==Toggles==
@@ -137,12 +134,9 @@ while True: # Runs until key is pressed to close
         _, difference_mask = cv2.threshold(difference_greyscale, threshold_diff_value, 255, cv2.THRESH_BINARY)
         #cv2.imshow("difference_mask", difference_mask)
 
-        # ==DIFFERENCE==
         # Erosion and dilation removes noise and thin foreground elements in mask
-        difference_mask = cv2.erode(difference_mask, np.ones((3, 3), np.uint8), iterations = 6)
-        difference_mask = cv2.dilate(difference_mask, np.ones((7, 7), np.uint8), iterations = 5)
         difference_mask = cv2.erode(difference_mask, np.ones((3, 3), np.uint8), iterations = 5)
-        difference_mask = cv2.dilate(difference_mask, np.ones((9, 9), np.uint8), iterations = 6)
+        difference_mask = cv2.dilate(difference_mask, np.ones((7, 7), np.uint8), iterations = 2)
         #cv2.imshow("difference_mask_processed", difference_mask)
 
         # Find contours from the resultant mask
@@ -162,8 +156,6 @@ while True: # Runs until key is pressed to close
             # Center pixels of the contour
             centerX = x + int((w / 2))
             centerY = y + int((h / 2))
-
-            area = w * h
 
             # If the contour's vertical center is on the floor (below the horizon) and it's bigger than 20x20...
             if centerY > horizon and w >= 20 and h >= 20:
@@ -195,7 +187,7 @@ while True: # Runs until key is pressed to close
         
         # Create a frame of the current object view
         hide_background(obj_cropped_img, xO, yO, wO, hO)
-        #cv2.imshow("obj_cropped_img", obj_cropped_img)
+        cv2.imshow("obj_cropped_img", obj_cropped_img)
         
         # === EDGE-DETECTION ===
         """
@@ -242,16 +234,14 @@ while True: # Runs until key is pressed to close
         cv2.imshow("fg_thresh", fg)
 
         # Removes noise/thin objects/ropes
-        fg = cv2.erode(fg, np.ones((3, 3), np.uint8), iterations = 3)
+        fg = cv2.erode(fg, np.ones((3, 3), np.uint8), iterations = 1)
         fg = cv2.dilate(fg, np.ones((7, 7), np.uint8), iterations = 3)
-        #hide_background(fg, xO, yO, wO, hO)
+        hide_background(fg, xO, yO, wO, hO)
         cv2.imshow("fg_processed", fg)
 
         # Finds contours of the moving objects
         fg_contours, hierarchy = cv2.findContours(fg, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        filter_contours = []
-
-        cv2.drawContours(frame, fg_contours, -1, green, 1)
+        cv2.drawContours(frame, fg_contours, -1, green, 4)
 
         # Count the number of contours in the mask
         color_area_num = len(fg_contours)
@@ -262,47 +252,19 @@ while True: # Runs until key is pressed to close
             for i in fg_contours:
                 # x, y are the top left coords, w, h are the width and height (of the contour)
                 x, y, w, h = cv2.boundingRect(i)
-                
                 # Center pixels of the contour
                 centerX = x + int((w / 2))
                 centerY = y + int((h / 2))
 
-                area = str(cv2.contourArea(i))
-
-                if centerY > horizon and w >= 10 and h >= 10:
-
-                    # Calculate distance from contour to known center of object
-                    centerDis = (abs(centerXO - centerX) + abs(centerYO - centerY))
-                    
-                    cv2.putText(frame, area, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (0, 0, 255), 2)
-
-                    # Find the contour with the centre nearest to the object's centre, and save them into the object variables
-                    if (centerDis < lowestDis):
-                        lowestDis = centerDis
-                        # These are the target values for the object
-                        global xT; global yT; global wT; global hT
-                        xT = x; yT = y; wT = w; hT = h
-
-                        filter_contours.append(i)
-
-            # Draw the contours of objects below the horizon
-            cv2.drawContours(frame, filter_contours, -1, blue, 7)
-            
-            # create black frame the size of the camera
-            filter_contour_mask = np.zeros(frame.shape, np.uint8)
-            #filter_contour_mask = cv2.threshold(filter_contour_mask, threshold_diff_value, 255, cv2.THRESH_BINARY)
-            filter_contour_mask = cv2.cvtColor(filter_contour_mask, cv2.COLOR_BGR2GRAY)
-
-            cv2.drawContours(filter_contour_mask, filter_contours, -1, white, -1) ####
-            print(frame.shape, filter_contour_mask.shape, "test")
-
-            mask_frame = cv2.bitwise_and(frame, frame, mask = filter_contour_mask)
-            cv2.circle(mask_frame, (centerXO, centerYO), 30, magenta, 2)
-            mask_frame = cv2.resize(mask_frame, (960, 540), interpolation=cv2.INTER_LINEAR)
-
-            filter_contour_mask = cv2.resize(filter_contour_mask, (960, 540), interpolation=cv2.INTER_LINEAR)
-            cv2.imshow("filter_contour_mask", filter_contour_mask)  
-            cv2.imshow("mask_frame", mask_frame)
+                # Calculate distance from contour to known center of object
+                centerDis = (abs(centerXO - centerX) + abs(centerYO - centerY))
+                
+                # Find the contour with the centre nearest to the object's centre, and save them into the object variables
+                if (centerDis < lowestDis):
+                    lowestDis = centerDis
+                    # These are the target values for the object
+                    global xT; global yT; global wT; global hT
+                    xT = x; yT = y; wT = w; hT = h
 
             # Once the object's new position has been found, the properties of the object gradually change to
             # those new properties
@@ -316,14 +278,16 @@ while True: # Runs until key is pressed to close
             centerYO = yO + int((hO / 2))
             
         # Draw small white circle on the center of object; this is the object tracker!
-        cv2.circle(frame, (centerXO, centerYO), 30, magenta, -1) 
+        cv2.circle(frame, (centerXO, centerYO), 5, white, -1) 
 
     # Places line at the horizon (for our reference)
     cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
+    cv2.imshow("frame_blurred", frame)
+    
+    # Show iniitial background image
+    cv2.imshow("background_initial", background_initial)
 
-    draw_frame = cv2.resize(frame, (960, 540), interpolation=cv2.INTER_LINEAR)
-    cv2.imshow("frame_blurred", draw_frame)
-
-    # Press 'q' to exit the loop
-    if cv2.waitKey(1) == ord('q'):
+    keyboard = cv2.waitKey(30)
+    if keyboard == 'q' or keyboard == 27:
+        cv2.destroyAllWindows()
         break
