@@ -327,3 +327,6 @@ while True: # Runs until key is pressed to close
     # Press 'q' to exit the loop
     if cv2.waitKey(1) == ord('q'):
         break
+
+    # For Martina:
+    # centerXO, centerYO

@@ -1,29 +1,31 @@
 import cv2
 import numpy as np
+from picamera2 import Picamera2
 import argparse
 import time
 
 # TODO
     # Maybe it should wait until the object has been "still" for 3 seconds before it is locked in as the object?
 
+# TODO: Filter out contours that are too big
+
 # ==Colours==
 red = (0, 0, 255)
 green = (0, 255, 0)
 white = (255, 255, 255)
+magenta = (255, 0, 255)
 blue = (255, 0, 0)
 black = (0, 0, 0)
 
 # ==Camera (incl. its width and height) initialisation==
-capture = cv2.VideoCapture(2)
-capture.set(cv2.CAP_PROP_EXPOSURE, -13)
-width = int(capture.get(3))
-height = int(capture.get(4))
+width = 640
+height = 480
 blurSize = 0
 blurArea = (15, 15)
 
 # ==Object Following Variables==
 # size of edge margin for the object view
-margin = 100 # bigger means code can find object if the "eye" gets lost
+margin = 400 # bigger means code can find object if the "eye" gets lost
              # smaller means less distractions, but it could lose the object
 
 # how quickly the position and size of the object updates (0 < speed =< 1)
@@ -58,7 +60,7 @@ threshold_diff_value_object = 20 # currently commented out
 
 interval_bg = 0.01 # how often the background image is updated (in seconds)
 interval_diff_bg = 0.01 # currently commented out
-interval_wait_for_object = 2 # length of time to wait for an object to be placed
+interval_wait_for_object = 0.2 # length of time to wait for an object to be placed
 interval_obj_id = 3 # how long an object should be in frame before it is IDed as the object
 
 # ==Toggles==
@@ -73,221 +75,225 @@ def hide_background(image, xO, yO, wO, hO):
     cv2.rectangle(image, (0, 0), (width, horizon), black, -1) # top
     cv2.rectangle(image, (0, yO + hO + margin), (width, height), black, -1) # bottom
 
-# Captures the first background image
-ret_bg_initial, background_initial = capture.read()
-####
-# Convert to HSV color space
-background_initial = cv2.cvtColor(background_initial, cv2.COLOR_BGR2HSV)
 
-# Adjust brightness of the Value channel
-background_initial[:, :, 2] = background_initial[:, :, 2] * 0.7
 
-# Convert back to BGR
-background_initial = cv2.cvtColor(background_initial, cv2.COLOR_HSV2BGR)####
+with Picamera2() as camera:
+    camera.preview_configuration.main.size = (320,240)
+    camera.preview_configuration.main.format = "RGB888"
+    camera.preview_configuration.align()
+    camera.configure("preview")
+    camera.start()
 
-background_initial = cv2.flip(background_initial, 1)
-print("Initial background photo taken.")
+    # Captures the first background image
+    background_initial = camera.capture_array()
+    ####
+    # Convert to HSV color space
+    background_initial = cv2.cvtColor(background_initial, cv2.COLOR_BGR2HSV)
 
-# ==Timers==
-start_time_bg = time.time()
-update_bg_time = time.time()
-diff_bg_time = time.time()
+    # Adjust brightness of the Value channel
+    background_initial[:, :, 2] = background_initial[:, :, 2] * 0.7
 
-# Blurs + resizes background image
-background_initial = cv2.resize(background_initial, resizedDimensions, interpolation=cv2.INTER_LINEAR)
-background_initial = cv2.GaussianBlur(background_initial, (5, 5), 5) 
+    # Convert back to BGR
+    background_initial = cv2.cvtColor(background_initial, cv2.COLOR_HSV2BGR)####
+    background_initial = cv2.flip(background_initial, 1)
 
-while True: # Runs until key is pressed to close
-    current_time = time.time() # Updates the current time so the timer can be used
+    # ==Timers==
+    start_time_bg = time.time()
+    update_bg_time = time.time()
+    diff_bg_time = time.time()
 
-    # Show the initial background photo
-    #cv2.imshow("background_blurred_initial", background_initial)
+    # Blurs + resizes background image
+    background_initial = cv2.resize(background_initial, resizedDimensions, interpolation=cv2.INTER_LINEAR)
+    background_initial = cv2.GaussianBlur(background_initial, (5, 5), 5) 
 
-    # Initialise current view
-    ret, frame = capture.read()
-    frame = cv2.flip(frame, 1)
-    frame = cv2.resize(frame, resizedDimensions, interpolation=cv2.INTER_LINEAR)
-    frame = cv2.GaussianBlur(frame, blurArea, blurSize)
+    while True: # Runs until key is pressed to close
+        current_time = time.time() # Updates the current time so the timer can be used
 
-    # This capture will show the cropped object view once the object is found
-    ret, obj_cropped_img = capture.read()
-    obj_cropped_img = cv2.flip(obj_cropped_img, 1)
-    obj_cropped_img = cv2.resize(obj_cropped_img, resizedDimensions, interpolation=cv2.INTER_LINEAR)
-    obj_cropped_img = cv2.GaussianBlur(obj_cropped_img, blurArea, blurSize) 
+        # Initialise current view
+        frame = camera.capture_array()
+        frame = cv2.flip(frame, 1)
+        frame = cv2.resize(frame, resizedDimensions, interpolation=cv2.INTER_LINEAR)
+        frame = cv2.GaussianBlur(frame, blurArea, blurSize)
 
-    # After "interval" seconds, save an image of the current view
-    if start_time_bg + interval_wait_for_object < current_time and object_identified == False:
-        # Saves an image of the view so the contour of the new objects can be found
-        if snapshot_diff_taken == False:
-            ret_snapshot, snapshot_diff = capture.read()
-            snapshot_diff = cv2.flip(snapshot_diff, 1)
-            snapshot_diff = cv2.resize(snapshot_diff, resizedDimensions, interpolation=cv2.INTER_LINEAR)
-            snapshot_diff = cv2.GaussianBlur(snapshot_diff, blurArea, blurSize)
-            snapshot_diff_taken = True
-            print("5 seconds passed. Detecting Object in the taken snapshot")
-        
-        # Compares difference between initial background photo and current view,
-        # then apply greyscale and apply binary filter (based on threshold value)
-        difference = cv2.absdiff(background_initial, snapshot_diff)
-        #cv2.imshow("difference", difference)
-        difference_greyscale = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
-        _, difference_mask = cv2.threshold(difference_greyscale, threshold_diff_value, 255, cv2.THRESH_BINARY)
-        #cv2.imshow("difference_mask", difference_mask)
+        # This capture will show the cropped object view once the object is found
+        obj_cropped_img = camera.capture_array()
 
-        # Erosion and dilation removes noise and thin foreground elements in mask
-        difference_mask = cv2.erode(difference_mask, np.ones((3, 3), np.uint8), iterations = 5)
-        difference_mask = cv2.dilate(difference_mask, np.ones((7, 7), np.uint8), iterations = 2)
-        #cv2.imshow("difference_mask_processed", difference_mask)
+        obj_cropped_img = cv2.flip(obj_cropped_img, 1)
+        obj_cropped_img = cv2.resize(obj_cropped_img, resizedDimensions, interpolation=cv2.INTER_LINEAR)
+        obj_cropped_img = cv2.GaussianBlur(obj_cropped_img, blurArea, blurSize) 
 
-        # Find contours from the resultant mask
-        contours, hierarchy = cv2.findContours(difference_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        # If "O" key is pressed
+        if cv2.waitKey(1) == ord('o'):
+            # Saves an image of the view so the contour of the new objects can be found
+            if snapshot_diff_taken == False:
+                snapshot_diff = camera.capture_array()
+                snapshot_diff = cv2.flip(snapshot_diff, 1)
+                snapshot_diff = cv2.resize(snapshot_diff, resizedDimensions, interpolation=cv2.INTER_LINEAR)
+                snapshot_diff = cv2.GaussianBlur(snapshot_diff, blurArea, blurSize)
+                print("'O' key pressed. Detecting object in the current snapshot...")
+            
+            # Compares difference between initial background photo and current view,
+            # then apply greyscale and apply binary filter (based on threshold value)
+            difference = cv2.absdiff(background_initial, snapshot_diff)
+            #cv2.imshow("difference", difference)
+            difference_greyscale = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
+            _, difference_mask = cv2.threshold(difference_greyscale, threshold_diff_value, 255, cv2.THRESH_BINARY)
+            #cv2.imshow("difference_mask", difference_mask)
 
-        # Count the number of contours in the mask
-        color_area_num = len(contours)
-        
-        # Initialises default distance from object to centre of horizon
-        lowestDis = 1000
+            # ==DIFFERENCE==
+            # Erosion and dilation removes noise and thin foreground elements in mask
+            difference_mask = cv2.erode(difference_mask, np.ones((3, 3), np.uint8), iterations = 6)
+            difference_mask = cv2.dilate(difference_mask, np.ones((7, 7), np.uint8), iterations = 5)
+            difference_mask = cv2.erode(difference_mask, np.ones((3, 3), np.uint8), iterations = 5)
+            difference_mask = cv2.dilate(difference_mask, np.ones((9, 9), np.uint8), iterations = 6)
+            #cv2.imshow("difference_mask_processed", difference_mask)
 
-        # For each contour, make a bounding box
-        for i in contours:
-            # x, y are the top left coords, w, h are the width and height (of the contour)
-            x, y, w, h = cv2.boundingRect(i)
+            # Find contours from the resultant mask
+            contours, hierarchy = cv2.findContours(difference_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-            # Center pixels of the contour
-            centerX = x + int((w / 2))
-            centerY = y + int((h / 2))
-
-            # If the contour's vertical center is on the floor (below the horizon) and it's bigger than 20x20...
-            if centerY > horizon and w >= 20 and h >= 20:
-                # Calculate its distance to the center of the floor
-                centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
-
-                # Find the contour on the floor with the centre-most dimensions,
-                # and save them into the global variables
-                if (centerDis < lowestDis):
-                    lowestDis = centerDis
-                    # The coordinates of the "object" are saved into these variables
-                    global xO; global yO; global wO; global hO
-                    xO = x; yO = y; wO = w; hO = h
-
-                    # Calculate center of the object
-                    centerXO = xO + int((wO / 2))
-                    centerYO = yO + int((hO / 2))
-                    object_identified = True # An object has been found, so this is now True
-    
-    if object_identified == True:
-        # Updates the background image once "interval" time has passed
-        # This does not overwrite the original background image! Maybe it should lmao.
-        if update_bg_time + interval_bg < current_time:
-            update_bg_time = time.time()
-            ret_bg, background = capture.read()
-            background = cv2.flip(background, 1)
-            background = cv2.resize(background, resizedDimensions, interpolation=cv2.INTER_LINEAR)
-            background_blurred = cv2.GaussianBlur(background, blurArea, blurSize)
-        
-        # Create a frame of the current object view
-        hide_background(obj_cropped_img, xO, yO, wO, hO)
-        cv2.imshow("obj_cropped_img", obj_cropped_img)
-        
-        # === EDGE-DETECTION ===
-        """
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) # Turn grayscale
-        blur = cv2.GaussianBlur(gray, (5, 5), 1.4) # Removes noise -- increasing the last number increases blur
-        edges = cv2.Canny(blur, threshold1=10, threshold2=50) # Apply Canny Edge Detector -- default is 100-200
-        cv2.imshow("edges", edges)
-        """
-
-                # === DIFFERENCE ====
-        """# Compares colour difference between background and current view, then apply greyscale and binary values (based on thresholdValue)
-        object_diff = cv2.absdiff(background, frame)
-        cv2.imshow("object_diff", object_diff)
-
-        # Tried looking at difference of the difference filter; didn't quite work out
-        if diff_bg_time + interval_diff_bg < current_time:
-            diff_bg_time = time.time()
-            diff_background = object_diff
-            background = cv2.resize(background, resizedDimensions, interpolation=cv2.INTER_LINEAR)
-            #fg_background = cv2.GaussianBlur(fg_background, blurArea, blurSize)
-        
-        diff_squared = backSub.apply(object_diff)
-        cv2.imshow("diff_squared", diff_squared)
-
-        difference_greyscale = cv2.cvtColor(object_diff, cv2.COLOR_BGR2GRAY)
-        cv2.imshow("difference_greyscale", difference_greyscale)
-        _, diff_mask = cv2.threshold(difference_greyscale, threshold_diff_value_object, 255, cv2.THRESH_BINARY)
-        cv2.imshow("diff_mask", diff_mask)
-
-        diff_mask = cv2.erode(diff_mask, np.ones((4, 4), np.uint8), iterations = 4)
-        diff_mask = cv2.dilate(diff_mask, np.ones((7, 7), np.uint8), iterations = 5)
-        cv2.imshow("diff_mask_processed", diff_mask)
-
-        diff_contours, hierarchy = cv2.findContours(diff_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(frame, diff_contours, -1, green, 1)
-        """
-        
-        # === FOREGROUND ====
-        # Detects changes in the camera view
-        fg = backSub.apply(frame, learningRate = learning_rate)
-        cv2.imshow("fg", fg)
-
-        _, fg = cv2.threshold(fg, threshold_fg_value, 255, cv2.THRESH_BINARY)
-        cv2.imshow("fg_thresh", fg)
-
-        # Removes noise/thin objects/ropes
-        fg = cv2.erode(fg, np.ones((3, 3), np.uint8), iterations = 1)
-        fg = cv2.dilate(fg, np.ones((7, 7), np.uint8), iterations = 3)
-        hide_background(fg, xO, yO, wO, hO)
-        cv2.imshow("fg_processed", fg)
-
-        # Finds contours of the moving objects
-        fg_contours, hierarchy = cv2.findContours(fg, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(frame, fg_contours, -1, green, 4)
-
-        # Count the number of contours in the mask
-        color_area_num = len(fg_contours)
-
-        # Initialises default distance from contours to known centre of object
-        lowestDis = 1000
-        if color_area_num > 0:
-            for i in fg_contours:
+            # Count the number of contours in the mask
+            color_area_num = len(contours)
+            
+            if color_area_num > 0:
+                print("An object has been found :)")
+                snapshot_diff_taken = True
+            
+            # For each contour, make a bounding box
+            for i in contours:
                 # x, y are the top left coords, w, h are the width and height (of the contour)
                 x, y, w, h = cv2.boundingRect(i)
+
                 # Center pixels of the contour
                 centerX = x + int((w / 2))
                 centerY = y + int((h / 2))
 
-                # Calculate distance from contour to known center of object
-                centerDis = (abs(centerXO - centerX) + abs(centerYO - centerY))
-                
-                # Find the contour with the centre nearest to the object's centre, and save them into the object variables
-                if (centerDis < lowestDis):
-                    lowestDis = centerDis
-                    # These are the target values for the object
-                    global xT; global yT; global wT; global hT
-                    xT = x; yT = y; wT = w; hT = h
+                area = w * h
 
-            # Once the object's new position has been found, the properties of the object gradually change to
-            # those new properties
-            xO = int(xO + (xT - xO) * speed_position)
-            yO = int(yO + (yT - yO) * speed_position)
-            wO = int(wO + (wT - wO) * speed_size)
-            hO = int(hO + (hT - hO) * speed_size)
+                # If the contour's vertical center is on the floor (below the horizon) and it's bigger than 20x20...
+                if centerY > horizon and w >= 10 and h >= 10:
+                    # Calculate its distance to the center of the floor
+                    centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
 
-            # Updates center of the object
-            centerXO = xO + int((wO / 2))
-            centerYO = yO + int((hO / 2))
+                    # Find the contour on the floor with the centre-most dimensions,
+                    # and save them into the global variables
+                    if (centerDis < lowestDis):
+                        lowestDis = centerDis
+                        # The coordinates of the "object" are saved into these variables
+                        global xO; global yO; global wO; global hO
+                        xO = x; yO = y; wO = w; hO = h
+
+                        # Calculate center of the object
+                        centerXO = xO + int((wO / 2))
+                        centerYO = yO + int((hO / 2))
+                        object_identified = True # An object has been found, so this is now True
+                        
+            else:
+                print("No object found :( pls try again.")
+            # Initialises default distance from object to centre of horizon
+            lowestDis = 1000
+
             
-        # Draw small white circle on the center of object; this is the object tracker!
-        cv2.circle(frame, (centerXO, centerYO), 5, white, -1) 
+        
+        if object_identified == True:
+            # Updates the background image once "interval" time has passed
+            # This does not overwrite the original background image! Maybe it should lmao.
+            if update_bg_time + interval_bg < current_time:
+                update_bg_time = time.time()
+                background = camera.capture_array()
+                background = cv2.flip(background, 1)
+                background = cv2.resize(background, resizedDimensions, interpolation=cv2.INTER_LINEAR)
+                background_blurred = cv2.GaussianBlur(background, blurArea, blurSize)
+            
+            # Create a frame of the current object view
+            hide_background(obj_cropped_img, xO, yO, wO, hO)
+            #cv2.imshow("obj_cropped_img", obj_cropped_img)
+            
+            # === FOREGROUND ====
+            # Detects changes in the camera view
+            fg = backSub.apply(frame, learningRate = learning_rate)
+            #cv2.imshow("fg", fg)
 
-    # Places line at the horizon (for our reference)
-    cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
-    cv2.imshow("frame_blurred", frame)
-    
-    # Show iniitial background image
-    cv2.imshow("background_initial", background_initial)
+            _, fg = cv2.threshold(fg, threshold_fg_value, 255, cv2.THRESH_BINARY)
+            #cv2.imshow("fg_thresh", fg)
 
-    keyboard = cv2.waitKey(30)
-    if keyboard == 'q' or keyboard == 27:
-        cv2.destroyAllWindows()
-        break
+            # Removes noise/thin objects/ropes
+            fg = cv2.erode(fg, np.ones((3, 3), np.uint8), iterations = 3)
+            fg = cv2.dilate(fg, np.ones((7, 7), np.uint8), iterations = 3)
+            #hide_background(fg, xO, yO, wO, hO)
+            #cv2.imshow("fg_processed", fg)
+
+            # Finds contours of the moving objects
+            fg_contours, hierarchy = cv2.findContours(fg, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            filter_contours = [] 
+
+            # Count the number of contours in the mask
+            color_area_num = len(fg_contours)
+
+            # Initialises default distance from contours to known centre of object
+            lowestDis = 1000
+            if color_area_num > 0:
+                for i in fg_contours:
+                    # x, y are the top left coords, w, h are the width and height (of the contour)
+                    x, y, w, h = cv2.boundingRect(i)
+                    
+                    # Center pixels of the contour
+                    centerX = x + int((w / 2))
+                    centerY = y + int((h / 2))
+
+                    area = cv2.contourArea(i)
+                    areaStr = str(cv2.contourArea(i))
+                    if centerY > horizon and w >= 10 and h >= 10 and area < 10000:
+
+                        # Calculate distance from contour to known center of object
+                        centerDis = (abs(centerXO - centerX) + abs(centerYO - centerY))
+                        
+                        cv2.putText(frame, areaStr, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (0, 0, 255), 1)
+                        # Find the contour with the centre nearest to the object's centre, and save them into the object variables
+                        if (centerDis < lowestDis):
+                            lowestDis = centerDis
+                            # These are the target values for the object
+                            global xT; global yT; global wT; global hT
+                            xT = x; yT = y; wT = w; hT = h
+
+                            filter_contours.append(i)
+
+                # Draw the contours of objects below the horizon
+                cv2.drawContours(frame, filter_contours, -1, blue, 7)
+                
+                # create black frame the size of the camera
+                filter_contour_mask = np.zeros(frame.shape, np.uint8)
+                #filter_contour_mask = cv2.threshold(filter_contour_mask, threshold_diff_value, 255, cv2.THRESH_BINARY)
+                filter_contour_mask = cv2.cvtColor(filter_contour_mask, cv2.COLOR_BGR2GRAY)
+
+                cv2.drawContours(filter_contour_mask, filter_contours, -1, white, -1) ####
+
+                mask_frame = cv2.bitwise_and(frame, frame, mask = filter_contour_mask)
+                cv2.circle(mask_frame, (centerXO, centerYO), 30, magenta, 2)
+
+                #cv2.imshow("filter_contour_mask", filter_contour_mask)  
+                cv2.imshow("mask_frame", mask_frame)
+
+                # Once the object's new position has been found, the properties of the object gradually change to
+                # those new properties
+                xO = int(xO + (xT - xO) * speed_position)
+                yO = int(yO + (yT - yO) * speed_position)
+                wO = int(wO + (wT - wO) * speed_size)
+                hO = int(hO + (hT - hO) * speed_size)
+
+                # Updates center of the object
+                centerXO = xO + int((wO / 2))
+                centerYO = yO + int((hO / 2))
+                
+            # Draw small white circle on the center of object; this is the object tracker!
+            cv2.circle(frame, (centerXO, centerYO), 10, magenta, -1) 
+
+        # Places line at the horizon (for our reference)
+        cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
+        cv2.imshow("frame_blurred", frame)
+
+        # Press 'q' to exit the loop
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+    # For Martina:
+    # centerXO, centerYO
