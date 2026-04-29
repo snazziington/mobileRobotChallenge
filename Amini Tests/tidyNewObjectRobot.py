@@ -1,3 +1,4 @@
+import picar_4wd as fc
 import cv2
 import numpy as np
 from picamera2 import Picamera2
@@ -22,6 +23,7 @@ width = 640
 height = 480
 blurSize = 0
 blurArea = (15, 15)
+speed = 10
 
 # ==Object Following Variables==
 # size of edge margin for the object view
@@ -46,7 +48,7 @@ else:
     backSub = cv2.createBackgroundSubtractorKNN()
 
 # ==Camera Properties; resized dimensions, horizon, center of floor==
-resizeFactor = 2 # Camera resolution is divided by this number
+resizeFactor = 4 # Camera resolution is divided by this number
 width = int(width / resizeFactor); height = int(height / resizeFactor)
 resizedDimensions = (width, height)
 horizon = int(height * 0.4)
@@ -66,7 +68,6 @@ interval_obj_id = 3 # how long an object should be in frame before it is IDed as
 # ==Toggles==
 snapshot_diff_taken = False # becomes true once an image has been taken post-object placement
 object_identified = False # becomes true once the object has been identified
-center_object_initialised = False # becomes true once the centre of the object has been identified
 
 # Covers the image with rectnagles so that only the object is visible
 def hide_background(image, xO, yO, wO, hO):
@@ -86,17 +87,7 @@ with Picamera2() as camera:
 
     # Captures the first background image
     background_initial = camera.capture_array()
-    ####
-    # Convert to HSV color space
-    background_initial = cv2.cvtColor(background_initial, cv2.COLOR_BGR2HSV)
-
-    # Adjust brightness of the Value channel
-    background_initial[:, :, 2] = background_initial[:, :, 2] * 0.7
-
-    # Convert back to BGR
-    background_initial = cv2.cvtColor(background_initial, cv2.COLOR_HSV2BGR)####
-    background_initial = cv2.flip(background_initial, 1)
-
+    
     # ==Timers==
     start_time_bg = time.time()
     update_bg_time = time.time()
@@ -157,43 +148,43 @@ with Picamera2() as camera:
             if color_area_num > 0:
                 print("An object has been found :)")
                 snapshot_diff_taken = True
-            
-            # For each contour, make a bounding box
-            for i in contours:
-                # x, y are the top left coords, w, h are the width and height (of the contour)
-                x, y, w, h = cv2.boundingRect(i)
 
-                # Center pixels of the contour
-                centerX = x + int((w / 2))
-                centerY = y + int((h / 2))
+                # Initialises default distance from object to centre of horizon
+                lowestDis = 1000
 
-                area = w * h
+                # For each contour, make a bounding box
+                for i in contours:
+                    # x, y are the top left coords, w, h are the width and height (of the contour)
+                    x, y, w, h = cv2.boundingRect(i)
 
-                # If the contour's vertical center is on the floor (below the horizon) and it's bigger than 20x20...
-                if centerY > horizon and w >= 10 and h >= 10:
-                    # Calculate its distance to the center of the floor
-                    centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
+                    # Center pixels of the contour
+                    centerX = x + int((w / 2))
+                    centerY = y + int((h / 2))
 
-                    # Find the contour on the floor with the centre-most dimensions,
-                    # and save them into the global variables
-                    if (centerDis < lowestDis):
-                        lowestDis = centerDis
-                        # The coordinates of the "object" are saved into these variables
-                        global xO; global yO; global wO; global hO
-                        xO = x; yO = y; wO = w; hO = h
+                    area = w * h
 
-                        # Calculate center of the object
-                        centerXO = xO + int((wO / 2))
-                        centerYO = yO + int((hO / 2))
-                        object_identified = True # An object has been found, so this is now True
-                        
+                    # If the contour's vertical center is on the floor (below the horizon) and it's bigger than 20x20...
+                    if centerY > horizon and w >= 10 and h >= 10:
+                        # Calculate its distance to the center of the floor
+                        centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
+
+                        # Find the contour on the floor with the centre-most dimensions,
+                        # and save them into the global variables
+                        if (centerDis < lowestDis):
+                            lowestDis = centerDis
+                            # The coordinates of the "object" are saved into these variables
+                            global xO; global yO; global wO; global hO
+                            xO = x; yO = y; wO = w; hO = h
+
+                            # Calculate center of the object
+                            centerXO = xO + int((wO / 2))
+                            centerYO = yO + int((hO / 2))
+                            object_identified = True # An object has been found, so this is now True
+
             else:
-                print("No object found :( pls try again.")
-            # Initialises default distance from object to centre of horizon
-            lowestDis = 1000
-
-            
+                print("No object found :( pls try again.")          
         
+        # Tracks Object
         if object_identified == True:
             # Updates the background image once "interval" time has passed
             # This does not overwrite the original background image! Maybe it should lmao.
@@ -271,7 +262,7 @@ with Picamera2() as camera:
                 cv2.circle(mask_frame, (centerXO, centerYO), 30, magenta, 2)
 
                 #cv2.imshow("filter_contour_mask", filter_contour_mask)  
-                cv2.imshow("mask_frame", mask_frame)
+                #cv2.imshow("mask_frame", mask_frame)
 
                 # Once the object's new position has been found, the properties of the object gradually change to
                 # those new properties
@@ -283,6 +274,7 @@ with Picamera2() as camera:
                 # Updates center of the object
                 centerXO = xO + int((wO / 2))
                 centerYO = yO + int((hO / 2))
+                print("Center Objetc:", centerXO)
                 
             # Draw small white circle on the center of object; this is the object tracker!
             cv2.circle(frame, (centerXO, centerYO), 10, magenta, -1) 
@@ -290,6 +282,19 @@ with Picamera2() as camera:
         # Places line at the horizon (for our reference)
         cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
         cv2.imshow("frame_blurred", frame)
+        
+        if object_identified == True:
+            if centerXO >= width / 2 + 10:
+                print("turn left")
+                fc.turn_left(speed)
+
+            elif centerXO <= width / 2 - 10:
+                print("turn right")
+                fc.turn_right(speed)
+
+            else: 
+                print("object in front")
+                fc.forward(speed)
 
         # Press 'q' to exit the loop
         if cv2.waitKey(1) == ord('q'):
