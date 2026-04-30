@@ -121,6 +121,8 @@ def robot_movement(centerXO, centerYO, object_held_distance):
             print("object in front")
             #fc.forward(speed)"""
 
+xT = 180; yT = 160; wT = 50; hT = 50
+
 with Picamera2() as camera:
     camera.preview_configuration.main.size = (320,240)
     camera.preview_configuration.main.format = "RGB888"
@@ -130,7 +132,8 @@ with Picamera2() as camera:
 
     # Captures the first background image
     background_initial = camera.capture_array()
-    
+    background_initial = cv2.flip(background_initial, 1)
+
     # ==Timers==
     start_time_bg = time.time()
     update_bg_time = time.time()
@@ -172,15 +175,13 @@ with Picamera2() as camera:
             #cv2.imshow("difference", difference)
             difference_greyscale = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
             _, difference_mask = cv2.threshold(difference_greyscale, threshold_diff_value, 255, cv2.THRESH_BINARY)
-            #cv2.imshow("difference_mask", difference_mask)
+            cv2.imshow("difference_mask", difference_mask)
 
             # ==DIFFERENCE==
             # Erosion and dilation removes noise and thin foreground elements in mask
             difference_mask = cv2.erode(difference_mask, np.ones((3, 3), np.uint8), iterations = 6)
-            difference_mask = cv2.dilate(difference_mask, np.ones((7, 7), np.uint8), iterations = 5)
-            difference_mask = cv2.erode(difference_mask, np.ones((3, 3), np.uint8), iterations = 5)
-            difference_mask = cv2.dilate(difference_mask, np.ones((9, 9), np.uint8), iterations = 6)
-            #cv2.imshow("difference_mask_processed", difference_mask)
+            difference_mask = cv2.dilate(difference_mask, np.ones((7, 7), np.uint8), iterations = 2)
+            cv2.imshow("difference_mask_processed", difference_mask)
 
             # Find contours from the resultant mask
             contours, hierarchy = cv2.findContours(difference_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -193,13 +194,13 @@ with Picamera2() as camera:
                 snapshot_diff_taken = True
 
                 # Initialises default distance from object to centre of horizon
-                lowestDis = 1000
+                lowestDis = 1000000
 
                 # For each contour, make a bounding box
                 for i in contours:
                     # x, y are the top left coords, w, h are the width and height (of the contour)
                     x, y, w, h = cv2.boundingRect(i)
-
+                    print("Coords of new objects:", x, y, w, h)
                     # Center pixels of the contour
                     centerX = x + int((w / 2))
                     centerY = y + int((h / 2))
@@ -210,7 +211,7 @@ with Picamera2() as camera:
                     if centerY > horizon and w >= 10 and h >= 10:
                         # Calculate its distance to the center of the floor
                         centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
-
+                        
                         # Find the contour on the floor with the centre-most dimensions,
                         # and save them into the global variables
                         if (centerDis < lowestDis):
@@ -220,12 +221,12 @@ with Picamera2() as camera:
                             xO = x; yO = y; wO = w; hO = h
 
                             # Calculate center of the object
-                            centerXO = xO + int((wO / 2))
-                            centerYO = yO + int((hO / 2))
+                            centerXO = xO + wO // 2
+                            centerYO = yO + hO // 2
 
                             print("Object Coords:", centerXO, centerYO)
 
-                            object_held_distance = math.sqrt(centerXO * centerXO + centerYO * centerYO)
+                            object_held_distance = math.sqrt(centerXO ** 2 + centerYO ** 2)
                             print("Maintain object distance at:", object_held_distance, "pls. Thank you.")
                             object_identified = True # An object has been found, so this is now True
 
@@ -275,7 +276,7 @@ with Picamera2() as camera:
                 for i in fg_contours:
                     # x, y are the top left coords, w, h are the width and height (of the contour)
                     x, y, w, h = cv2.boundingRect(i)
-                    print("For loop:", i)
+
                     # Center pixels of the contour
                     centerX = x + int((w / 2))
                     centerY = y + int((h / 2))
