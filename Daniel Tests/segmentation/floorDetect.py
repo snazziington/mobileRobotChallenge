@@ -1,7 +1,21 @@
 import cv2
 import numpy as np
 
-def floorMasker(frame, width, height):
+def floorMasker(frame):
+
+    width = frame.shape[1]
+    height = frame.shape[0]
+
+    #sets coordinates for floor color detection
+    x1 = int(width//8)
+    x2 = int(width - width//8)
+    y1 = int(height - height//5)
+    y2 = int(height)
+
+    # Sets dimensions for the resized floor detect region
+    blurWidth = (x2-x1)//4
+    blurHeight = (y2-y1)//4
+
     # Creates the frame for floor detection
     floorReg = frame[y1:y2, x1:x2]
     floorReg = cv2.resize(floorReg, (blurWidth, blurHeight), interpolation=cv2.INTER_LINEAR)
@@ -47,9 +61,6 @@ x2 = int(width - width//8)
 y1 = int(height - height//5)
 y2 = int(height)
 
-# Sets dimensions for the resized floor detect region
-blurWidth = (x2-x1)//4
-blurHeight = (y2-y1)//4
 
 while True:
 
@@ -62,7 +73,7 @@ while True:
     frame = cv2.GaussianBlur(frame, (25,25), 4)
 
     # Returns the floor detection mask and the "average" floor color in BGR and LAB
-    mask, floorColPix, floorpixLAB = floorMasker(frame, width, height)
+    mask, floorColPix, floorpixLAB = floorMasker(frame)
 
     # Uncomment to draw rectangle around floor detect region
     cv2.rectangle(frame, (x1,y1), (x2,y2), (int(floorColPix[0]), int(floorColPix[1]), int(floorColPix[2])),3)
