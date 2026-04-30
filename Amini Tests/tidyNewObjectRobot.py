@@ -1,4 +1,4 @@
-import picar_4wd as fc
+#import picar_4wd as fc
 import cv2
 import numpy as np
 from picamera2 import Picamera2
@@ -80,8 +80,7 @@ def hide_background(image, xO, yO, wO, hO):
     cv2.rectangle(image, (xO + wO + margin, 0), (width, height), black, -1) # right
     cv2.rectangle(image, (0, 0), (width, horizon), black, -1) # top
     cv2.rectangle(image, (0, yO + hO + margin), (width, height), black, -1) # bottom
-
-<<<<<<< Updated upstream
+    
 def robot_movement(centerXO, centerYO, object_held_distance):
         # Horizontal turns
         distance_to_object = math.sqrt(centerXO ** 2 + centerYO ** 2)
@@ -94,50 +93,33 @@ def robot_movement(centerXO, centerYO, object_held_distance):
 
         if centerXO >= width / 2 + object_margin:
             print("turn left")
-            fc.turn_left(speed)
+            ##fc.turn_left(speed)
 
         elif centerXO <= width / 2 - object_margin:
             print("turn right")
-            fc.turn_right(speed)
+            ##fc.turn_right(speed)
         
         elif difference_in_distance > 10: 
             print("object in front")
-            fc.forward(speed)
+            ##fc.forward(speed)
 
         elif difference_in_distance < -10: 
             print("object in front")
-            fc.backward(speed)
+            ##fc.backward(speed)
 
         """
         # TODO: Forward speed
         if centerYO >= height / 2 + 10:
             print("forward")
-            fc.forward(speed)
+            #fc.forward(speed)
 
         elif centerYO <= height / 2 - 10:
             print("backward")
-            fc.backward(speed)
+            #fc.backward(speed)
 
         else: 
             print("object in front")
-            fc.forward(speed)"""
-=======
-def robot_movement(centerXO, centerYO):
-    # Horizontal turns
-    if centerXO >= width / 2 + 10:
-        print("turn left")
-        fc.turn_left(speed)
-
-    elif centerXO <= width / 2 - 10:
-        print("turn right")
-        fc.turn_right(speed)
-
-    else: 
-        print("object in front")
-        fc.forward(speed)
-
-    # TODO: Forward speed
->>>>>>> Stashed changes
+            #fc.forward(speed)"""
 
 with Picamera2() as camera:
     camera.preview_configuration.main.size = (320,240)
@@ -293,7 +275,7 @@ with Picamera2() as camera:
                 for i in fg_contours:
                     # x, y are the top left coords, w, h are the width and height (of the contour)
                     x, y, w, h = cv2.boundingRect(i)
-
+                    print("For loop:", i)
                     # Center pixels of the contour
                     centerX = x + int((w / 2))
                     centerY = y + int((h / 2))
@@ -352,7 +334,7 @@ with Picamera2() as camera:
         cv2.imshow("frame_blurred", frame)
         # Press 'q' to exit the loop
         if cv2.waitKey(1) == ord('q'):
-            fc.stop()
+            ##fc.stop()
             break
 
     # For Martina:
