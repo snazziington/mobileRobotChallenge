@@ -92,7 +92,17 @@ def robot_movement(centerXO, centerYO):
             fc.forward(speed)
 
         # TODO: Forward speed
+        if centerYO >= height / 2 + 10:
+            print("forward")
+            fc.forward(speed)
 
+        elif centerYO <= width / 2 - 10:
+            print("backward")
+            fc.backward(speed)
+
+        else: 
+            print("object in front")
+            fc.forward(speed)
 with Picamera2() as camera:
     camera.preview_configuration.main.size = (320,240)
     camera.preview_configuration.main.format = "RGB888"
