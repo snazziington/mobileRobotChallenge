@@ -6,25 +6,29 @@ def floorMasker(frame, width, height):
     floorReg = frame[y1:y2, x1:x2]
     floorReg = cv2.resize(floorReg, (blurWidth, blurHeight), interpolation=cv2.INTER_LINEAR)
     blur = cv2.blur(floorReg,(blurWidth,blurHeight))
-    floorColHSV = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
+    floorColLAB = cv2.cvtColor(blur, cv2.COLOR_BGR2LAB)
     floorColPix = blur[blurHeight//2, blurWidth//2]
-    floorPixHSV = floorColHSV[blurHeight//2, blurWidth//2]
+    floorPixLAB = floorColLAB[blurHeight//2, blurWidth//2]
 
-    # Splits the frame into its HSV components and blurs the Value component
-    h,s,v = cv2.split(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV))
-    vblur = blur = cv2.blur(v,(10,10))
+    # Splits the frame into its LAB components and blurs the Lightness component
+    l,a,b = cv2.split(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV))
+    lblur = blur = cv2.blur(l,(10,10))
 
-    # Reconstructs the frame with the blurred Value
-    blurFrame = cv2.cvtColor(cv2.merge([h,s,vblur]), cv2.COLOR_HSV2BGR)
+    # Reconstructs the frame with the blurred Lightnass
+    blurFrame = cv2.cvtColor(cv2.merge([lblur,a,b]), cv2.COLOR_HSV2BGR)
 
     # Sets the floor color detection bounds
-    lowerFloor = np.array([int(floorPixHSV[0])-15, int(floorPixHSV[1])-25, 30])
-    upperFloor = np.array([int(floorPixHSV[0])+15, int(floorPixHSV[1])+25, 253])
+    lowerFloor = np.array([min(40, int(floorPixLAB[0]-5)), int(floorPixLAB[1])-10, int(floorPixLAB[2])-10])
+    upperFloor = np.array([max(253, int(floorPixLAB[0]+5)), int(floorPixLAB[1])+10, int(floorPixLAB[2])+10])
 
-    # Creates an image mask based off of the frame with blurred Value
-    mask = cv2.inRange(cv2.cvtColor(blurFrame, cv2.COLOR_BGR2HSV), lowerFloor, upperFloor)
+    # Creates an image mask based off of the frame with blurred Lightness
+    mask = cv2.inRange(cv2.cvtColor(blurFrame, cv2.COLOR_BGR2LAB), lowerFloor, upperFloor)
 
-    return mask, floorColPix, floorPixHSV
+    # Denoise a little with a dilation followed by an erosion to fill small gaps
+    mask = cv2.dilate(mask, np.ones((3,3), np.uint8), iterations = 2)
+    mask = cv2.erode(mask, np.ones((3,3), np.uint8), iterations = 2)
+
+    return mask, floorColPix, floorPixLAB
 
 windowTitle = "Basic Segmentation"
 
@@ -54,8 +58,11 @@ while True:
     # Flips the frame to be the right orientation
     frame = cv2.flip(frame,1)
 
-    # Returns the floor detection mask and the "average" floor color in BGR and HSV
-    mask, floorColPix, floorpixHSV = floorMasker(frame, width, height)
+    # Applies a slight blur to reduce noise
+    frame = cv2.GaussianBlur(frame, (25,25), 4)
+
+    # Returns the floor detection mask and the "average" floor color in BGR and LAB
+    mask, floorColPix, floorpixLAB = floorMasker(frame, width, height)
 
     # Uncomment to draw rectangle around floor detect region
     cv2.rectangle(frame, (x1,y1), (x2,y2), (int(floorColPix[0]), int(floorColPix[1]), int(floorColPix[2])),3)
