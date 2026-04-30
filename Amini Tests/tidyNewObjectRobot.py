@@ -4,6 +4,10 @@ import numpy as np
 from picamera2 import Picamera2
 import argparse
 import time
+import math
+import sys
+import tty
+import termios
 
 # TODO
     # Maybe it should wait until the object has been "still" for 3 seconds before it is locked in as the object?
@@ -23,12 +27,13 @@ width = 640
 height = 480
 blurSize = 0
 blurArea = (15, 15)
-speed = 10
+speed = 1
 
 # ==Object Following Variables==
 # size of edge margin for the object view
 margin = 400 # bigger means code can find object if the "eye" gets lost
              # smaller means less distractions, but it could lose the object
+object_margin = 10
 
 # how quickly the position and size of the object updates (0 < speed =< 1)
 speed_position = 0.4
@@ -48,7 +53,7 @@ else:
     backSub = cv2.createBackgroundSubtractorKNN()
 
 # ==Camera Properties; resized dimensions, horizon, center of floor==
-resizeFactor = 4 # Camera resolution is divided by this number
+resizeFactor = 2 # Camera resolution is divided by this number
 width = int(width / resizeFactor); height = int(height / resizeFactor)
 resizedDimensions = (width, height)
 horizon = int(height * 0.4)
@@ -76,17 +81,24 @@ def hide_background(image, xO, yO, wO, hO):
     cv2.rectangle(image, (0, 0), (width, horizon), black, -1) # top
     cv2.rectangle(image, (0, yO + hO + margin), (width, height), black, -1) # bottom
 
-def robot_movement(centerXO, centerYO):
-        
+def robot_movement(centerXO, centerYO, object_held_distance):
         # Horizontal turns
-        if centerXO >= width / 2 + 10:
+        distance_to_object = math.sqrt(centerXO ** 2 + centerYO ** 2)
+        difference_in_distance = object_held_distance - distance_to_object
+        print(" ")
+        print("==Distance Stats==")
+        print("object_held_distance", object_held_distance)
+        print("distance_to_object", distance_to_object)
+        print("difference_in_distance", difference_in_distance)
+
+        if centerXO >= width / 2 + object_margin:
             print("turn left")
-            fc.turn_left(speed)
+            #fc.turn_left(speed)
 
-        elif centerXO <= width / 2 - 10:
+        elif centerXO <= width / 2 - object_margin:
             print("turn right")
-            fc.turn_right(speed)
-
+            #fc.turn_right(speed)
+        """
         else: 
             print("object in front")
             fc.forward(speed)
@@ -96,13 +108,14 @@ def robot_movement(centerXO, centerYO):
             print("forward")
             fc.forward(speed)
 
-        elif centerYO <= width / 2 - 10:
+        elif centerYO <= height / 2 - 10:
             print("backward")
             fc.backward(speed)
 
         else: 
             print("object in front")
-            fc.forward(speed)
+            fc.forward(speed)"""
+
 with Picamera2() as camera:
     camera.preview_configuration.main.size = (320,240)
     camera.preview_configuration.main.format = "RGB888"
@@ -138,7 +151,7 @@ with Picamera2() as camera:
         obj_cropped_img = cv2.resize(obj_cropped_img, resizedDimensions, interpolation=cv2.INTER_LINEAR)
         obj_cropped_img = cv2.GaussianBlur(obj_cropped_img, blurArea, blurSize) 
 
-        # If "O" key is pressed
+        # If "O" key is pressed in terminal or cv2 view
         if cv2.waitKey(1) == ord('o'):
             # Saves an image of the view so the contour of the new objects can be found
             if snapshot_diff_taken == False:
@@ -204,6 +217,11 @@ with Picamera2() as camera:
                             # Calculate center of the object
                             centerXO = xO + int((wO / 2))
                             centerYO = yO + int((hO / 2))
+
+                            print("Object Coords:", centerXO, centerYO)
+
+                            object_held_distance = math.sqrt(centerXO * centerXO + centerYO * centerYO)
+                            print("Maintain object distance at:", object_held_distance, "pls. Thank you.")
                             object_identified = True # An object has been found, so this is now True
 
             else:
@@ -270,7 +288,7 @@ with Picamera2() as camera:
                             # These are the target values for the object
                             global xT; global yT; global wT; global hT
                             xT = x; yT = y; wT = w; hT = h
-
+                            
                             filter_contours.append(i)
 
                 # Draw the contours of objects below the horizon
@@ -304,16 +322,15 @@ with Picamera2() as camera:
             # Draw small white circle on the center of object; this is the object tracker!
             cv2.circle(frame, (centerXO, centerYO), 10, magenta, -1)
             
-            robot_movement(centerXO)
+            robot_movement(centerXO, centerYO, object_held_distance)
 
         # Places line at the horizon (for our reference)
         cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
-        #cv2.imshow("frame_blurred", frame)
-        
-        
-
+        cv2.imshow("frame_blurred", frame)
+        print("show frame blured?")
         # Press 'q' to exit the loop
         if cv2.waitKey(1) == ord('q'):
+            fc.stop()
             break
 
     # For Martina:
