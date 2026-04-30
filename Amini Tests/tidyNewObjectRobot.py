@@ -93,16 +93,21 @@ def robot_movement(centerXO, centerYO, object_held_distance):
 
         if centerXO >= width / 2 + object_margin:
             print("turn left")
-            #fc.turn_left(speed)
+            fc.turn_left(speed)
 
         elif centerXO <= width / 2 - object_margin:
             print("turn right")
-            #fc.turn_right(speed)
-        """
-        else: 
+            fc.turn_right(speed)
+        
+        elif difference_in_distance > 10: 
             print("object in front")
             fc.forward(speed)
 
+        elif difference_in_distance < -10: 
+            print("object in front")
+            fc.backward(speed)
+
+        """
         # TODO: Forward speed
         if centerYO >= height / 2 + 10:
             print("forward")
@@ -264,12 +269,13 @@ with Picamera2() as camera:
             color_area_num = len(fg_contours)
 
             # Initialises default distance from contours to known centre of object
-            lowestDis = 1000
+            lowestDis = 100000000
+
             if color_area_num > 0:
                 for i in fg_contours:
                     # x, y are the top left coords, w, h are the width and height (of the contour)
                     x, y, w, h = cv2.boundingRect(i)
-                    
+
                     # Center pixels of the contour
                     centerX = x + int((w / 2))
                     centerY = y + int((h / 2))
@@ -280,15 +286,14 @@ with Picamera2() as camera:
 
                         # Calculate distance from contour to known center of object
                         centerDis = (abs(centerXO - centerX) + abs(centerYO - centerY))
-                        
+
                         cv2.putText(frame, areaStr, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (0, 0, 255), 1)
                         # Find the contour with the centre nearest to the object's centre, and save them into the object variables
                         if (centerDis < lowestDis):
                             lowestDis = centerDis
                             # These are the target values for the object
-                            global xT; global yT; global wT; global hT
                             xT = x; yT = y; wT = w; hT = h
-                            
+
                             filter_contours.append(i)
 
                 # Draw the contours of objects below the horizon
@@ -327,7 +332,6 @@ with Picamera2() as camera:
         # Places line at the horizon (for our reference)
         cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
         cv2.imshow("frame_blurred", frame)
-        print("show frame blured?")
         # Press 'q' to exit the loop
         if cv2.waitKey(1) == ord('q'):
             fc.stop()
