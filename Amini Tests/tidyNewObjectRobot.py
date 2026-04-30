@@ -76,7 +76,22 @@ def hide_background(image, xO, yO, wO, hO):
     cv2.rectangle(image, (0, 0), (width, horizon), black, -1) # top
     cv2.rectangle(image, (0, yO + hO + margin), (width, height), black, -1) # bottom
 
+def robot_movement(centerXO, centerYO):
+        
+        # Horizontal turns
+        if centerXO >= width / 2 + 10:
+            print("turn left")
+            fc.turn_left(speed)
 
+        elif centerXO <= width / 2 - 10:
+            print("turn right")
+            fc.turn_right(speed)
+
+        else: 
+            print("object in front")
+            fc.forward(speed)
+
+        # TODO: Forward speed
 
 with Picamera2() as camera:
     camera.preview_configuration.main.size = (320,240)
@@ -277,24 +292,15 @@ with Picamera2() as camera:
                 print("Center Objetc:", centerXO)
                 
             # Draw small white circle on the center of object; this is the object tracker!
-            cv2.circle(frame, (centerXO, centerYO), 10, magenta, -1) 
+            cv2.circle(frame, (centerXO, centerYO), 10, magenta, -1)
+            
+            robot_movement(centerXO)
 
         # Places line at the horizon (for our reference)
         cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
-        cv2.imshow("frame_blurred", frame)
+        #cv2.imshow("frame_blurred", frame)
         
-        if object_identified == True:
-            if centerXO >= width / 2 + 10:
-                print("turn left")
-                fc.turn_left(speed)
-
-            elif centerXO <= width / 2 - 10:
-                print("turn right")
-                fc.turn_right(speed)
-
-            else: 
-                print("object in front")
-                fc.forward(speed)
+        
 
         # Press 'q' to exit the loop
         if cv2.waitKey(1) == ord('q'):
