@@ -81,6 +81,7 @@ def hide_background(image, xO, yO, wO, hO):
     cv2.rectangle(image, (0, 0), (width, horizon), black, -1) # top
     cv2.rectangle(image, (0, yO + hO + margin), (width, height), black, -1) # bottom
 
+<<<<<<< Updated upstream
 def robot_movement(centerXO, centerYO, object_held_distance):
         # Horizontal turns
         distance_to_object = math.sqrt(centerXO ** 2 + centerYO ** 2)
@@ -120,6 +121,23 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         else: 
             print("object in front")
             fc.forward(speed)"""
+=======
+def robot_movement(centerXO, centerYO):
+    # Horizontal turns
+    if centerXO >= width / 2 + 10:
+        print("turn left")
+        fc.turn_left(speed)
+
+    elif centerXO <= width / 2 - 10:
+        print("turn right")
+        fc.turn_right(speed)
+
+    else: 
+        print("object in front")
+        fc.forward(speed)
+
+    # TODO: Forward speed
+>>>>>>> Stashed changes
 
 with Picamera2() as camera:
     camera.preview_configuration.main.size = (320,240)
