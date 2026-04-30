@@ -51,7 +51,7 @@ else:
     backSub = cv2.createBackgroundSubtractorKNN()
 
 # ==Camera Properties; resized dimensions, horizon, center of floor==
-resizeFactor = 2 # Camera resolution is divided by this number
+resizeFactor = 4 # Camera resolution is divided by this number
 width = int(width / resizeFactor); height = int(height / resizeFactor)
 resizedDimensions = (width, height)
 horizon = int(height * 0.4)
@@ -79,7 +79,7 @@ def hide_background(image, xO, yO, wO, hO):
     cv2.rectangle(image, (0, 0), (width, horizon), black, -1) # top
     cv2.rectangle(image, (0, yO + hO + margin), (width, height), black, -1) # bottom
 
-speed = 20
+speed = 40
 interval_turn = 0.1
 
 def robot_movement(centerXO, centerYO, object_held_distance):
@@ -118,8 +118,51 @@ def robot_movement(centerXO, centerYO, object_held_distance):
 
 xT = 180; yT = 160; wT = 50; hT = 50
 
+color_dict = {'red':[0,4],'orange':[5,18],'yellow':[22,37],'green':[42,85],'blue':[92,110],'purple':[115,165],'red_2':[165,180]}  #Here is the range of H in the HSV color space represented by the color
+
+kernel_5 = np.ones((5,5),np.uint8) #Define a 5×5 convolution kernel with element values of all 1.
+
+def color_detect(img, color_name):
+
+    # The blue range will be different under different lighting conditions and can be adjusted flexibly.  H: chroma, S: saturation v: lightness
+    resize_img = cv2.resize(img, (160,120), interpolation=cv2.INTER_LINEAR)  # In order to reduce the amount of calculation, the size of the picture is reduced to (160,120)
+    hsv = cv2.cvtColor(resize_img, cv2.COLOR_BGR2HSV)              # Convert from BGR to HSV
+    color_type = color_name
+    
+    mask = cv2.inRange(hsv,np.array([min(color_dict[color_type]), 60, 60]), np.array([max(color_dict[color_type]), 255, 255]) )           # inRange()：Make the ones between lower/upper white, and the rest black
+    if color_type == 'red':
+            mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0],0,0), (color_dict['red_2'][1],255,255)) 
+            mask = cv2.bitwise_or(mask, mask_2)
+
+    morphologyEx_img = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_5,iterations=1)              # Perform an open operation on the image 
+
+    # Find the contour in morphologyEx_img, and the contours are arranged according to the area from small to large.
+    _tuple = cv2.findContours(morphologyEx_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)      
+    # compatible with opencv3.x and openc4.x
+    if len(_tuple) == 3:
+        _, contours, hierarchy = _tuple
+    else:
+        contours, hierarchy = _tuple
+    
+    color_area_num = len(contours) # Count the number of contours
+
+    if color_area_num > 0: 
+        for i in contours:    # Traverse all contours
+            x,y,w,h = cv2.boundingRect(i)      # Decompose the contour into the coordinates of the upper left corner and the width and height of the recognition object
+
+            # Draw a rectangle on the image (picture, upper left corner coordinate, lower right corner coordinate, color, line width)
+            if w >= 8 and h >= 8: # Because the picture is reduced to a quarter of the original size, if you want to draw a rectangle on the original picture to circle the target, you have to multiply x, y, w, h by 4.
+                x = x * 4
+                y = y * 4 
+                w = w * 4
+                h = h * 4
+                cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)  # Draw a rectangular frame
+                cv2.putText(img,color_type,(x,y), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,0,255),2)# Add character description
+
+    return img,mask,morphologyEx_img
+
 with Picamera2() as camera:
-    camera.preview_configuration.main.size = (320,240)
+    camera.preview_configuration.main.size = (320, 240)
     camera.preview_configuration.main.format = "RGB888"
     camera.preview_configuration.align()
     camera.configure("preview")
@@ -174,8 +217,8 @@ with Picamera2() as camera:
 
             # ==DIFFERENCE==
             # Erosion and dilation removes noise and thin foreground elements in mask
-            difference_mask = cv2.erode(difference_mask, np.ones((3, 3), np.uint8), iterations = 6)
-            difference_mask = cv2.dilate(difference_mask, np.ones((7, 7), np.uint8), iterations = 2)
+            difference_mask = cv2.erode(difference_mask, np.ones((2, 2), np.uint8), iterations = 3)
+            difference_mask = cv2.dilate(difference_mask, np.ones((4, 4), np.uint8), iterations = 2)
             cv2.imshow("difference_mask_processed", difference_mask)
 
             # Find contours from the resultant mask
