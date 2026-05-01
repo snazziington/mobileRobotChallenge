@@ -136,7 +136,7 @@ def color_detect(img, color_name):
             x, y, w, h = cv2.boundingRect(i)      # Decompose the contour into the coordinates of the upper left corner and the width and height of the recognition object
 
             # Draw a rectangle on the image (picture, upper left corner coordinate, lower right corner coordinate, color, line width)
-            cv2.rectangle(img, (x, y), (x+ w, y+ h), (0, 255, 0), 2)  # Draw a rectangular frame
+            cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Draw a rectangular frame
             cv2.putText(img, color_type, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)# Add character description
 
     return mask
