@@ -65,6 +65,7 @@ def hide_background(image, xO, yO, wO, hO):
 speed = 40
 interval_turn = 0.1 # Time spent turning
 object_held_distance = 350 # Distance to maintain from object
+object_distance_margin = 100
 
 def robot_movement(centerXO, centerYO, object_held_distance):
         # Object Distance Calculations
@@ -72,6 +73,7 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         vertical_distance_object = height - centerYO
         pixel_distance_to_object = math.sqrt(horizontal_distance_object ** 2 + vertical_distance_object ** 2)
         object_angle = int(math.degrees(math.asin(horizontal_distance_object / pixel_distance_to_object))  ) 
+        object_angle_margin = 15
 
         # Exponential ratio for pixel distance
         ratio = 1.5
@@ -96,19 +98,19 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         print("turning_speed", turning_speed)
         print("foward_speed", foward_speed)
 
-        if object_angle < -15:
+        if object_angle < -(object_angle_margin):
             fc.turn_left(turning_speed)
             print("turn left")
 
-        elif object_angle > 15:
+        elif object_angle > object_angle_margin:
             fc.turn_right(turning_speed)
             print("turn right")
 
-        elif difference_in_distance > 15: 
+        elif difference_in_distance > object_distance_margin: 
             print("object far")
             fc.forward(foward_speed)
 
-        elif difference_in_distance < -15: 
+        elif difference_in_distance < -(object_distance_margin): 
             print("object close")
             fc.backward(foward_speed)
 
@@ -236,7 +238,7 @@ with Picamera2() as camera:
                     area = w * h
 
                     # If the contour's vertical center is on the floor (below the horizon) and it's bigger than 20x20...
-                    if centerY > horizon and w >= int(width / 20) and h >= int(width / 20):
+                    if centerY > horizon:
                         # Calculate its distance to the center of the floor
                         centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
                         
@@ -338,6 +340,7 @@ with Picamera2() as camera:
         cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
         frame = cv2.flip(frame, 1)
         cv2.imshow("frame_blurred", frame)
+
         # Press 'q' to exit the loop
         if cv2.waitKey(1) == ord('q'):
             fc.stop()
