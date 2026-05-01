@@ -42,7 +42,6 @@ centerFloor = [int(width / 2), int(horizon * 1.5)]
 # ==Threshold for difference mask==
 # This compares the previous frame to next frame (increase for less sensitivity))
 threshold_diff_value = 10
-threshold_fg_value = 150
 threshold_diff_value_object = 20 # currently commented out
 
 interval_bg = 0.01 # how often the background image is updated (in seconds)
@@ -53,13 +52,6 @@ interval_obj_id = 3 # how long an object should be in frame before it is IDed as
 # ==Toggles==
 snapshot_diff_taken = False # becomes true once an image has been taken post-object placement
 object_identified = False # becomes true once the object has been identified
-
-# Covers the image with rectangles so that only the object is visible
-def hide_background(image, xO, yO, wO, hO):
-    cv2.rectangle(image, (0, 0), (max(0, xO - margin), height), black, -1) # left
-    cv2.rectangle(image, (xO + wO + margin, 0), (width, height), black, -1) # right
-    cv2.rectangle(image, (0, 0), (width, horizon), black, -1) # top
-    cv2.rectangle(image, (0, yO + hO + margin), (width, height), black, -1) # bottom
 
 # Robot Movement
 speed = 40
@@ -85,7 +77,7 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         else: turning_speed = min(80, np.interp(abs(object_angle), [15, 50], [1, 70]))
         
         # Defining forward speed
-        foward_speed = min(120, abs(difference_in_distance / 1.5))
+        foward_speed = min(120, abs(difference_in_distance / 1.2))
 
         print(" ")
         print("==Distance Stats==")
@@ -129,6 +121,7 @@ def color_detect(img, color_name):
     color_type = color_name
     
     mask = cv2.inRange(hsv, np.array([min(color_dict[color_type]), 60, 0]), np.array([max(color_dict[color_type]), 255, 255]) )           # inRange()：Make the ones between lower/upper white, and the rest black
+    
     if color_type == 'red':
             mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0], 128, 0), (color_dict['red_2'][1], 255, 128)) 
             mask = cv2.bitwise_or(mask, mask_2)
@@ -164,11 +157,6 @@ with Picamera2() as camera:
     background_initial = camera.capture_array()
     background_initial = cv2.flip(background_initial, 1)
 
-    # ==Timers==
-    start_time_bg = time.time()
-    update_bg_time = time.time()
-    diff_bg_time = time.time()
-
     # Blurs + resizes background image
     background_initial = cv2.resize(background_initial, resizedDimensions, interpolation=cv2.INTER_LINEAR)
     background_initial = cv2.GaussianBlur(background_initial, (5, 5), 5) 
@@ -183,11 +171,10 @@ with Picamera2() as camera:
         frame = cv2.GaussianBlur(frame, blurArea, blurSize)
 
         # This capture will show the cropped object view once the object is found
-        obj_cropped_img = camera.capture_array()
-
-        obj_cropped_img = cv2.flip(obj_cropped_img, 1)
-        obj_cropped_img = cv2.resize(obj_cropped_img, resizedDimensions, interpolation=cv2.INTER_LINEAR)
-        obj_cropped_img = cv2.GaussianBlur(obj_cropped_img, blurArea, blurSize) 
+        frame_current = camera.capture_array()
+        frame_current = cv2.flip(frame_current, 1)
+        frame_current = cv2.resize(frame_current, resizedDimensions, interpolation=cv2.INTER_LINEAR)
+        frame_current = cv2.GaussianBlur(frame_current, blurArea, blurSize) 
 
         # If "O" key is pressed in terminal or cv2 view
         if cv2.waitKey(1) == ord('o'):
@@ -290,7 +277,6 @@ with Picamera2() as camera:
                     area = cv2.contourArea(i)
                     areaStr = str(cv2.contourArea(i))
                     if centerY > horizon:
-
                         # Calculate distance from contour to known center of object
                         centerDis = (abs(centerXO - centerX) + abs(centerYO - centerY))
 
@@ -329,22 +315,20 @@ with Picamera2() as camera:
                 # Updates center of the object
                 centerXO = xO + int((wO / 2))
                 centerYO = yO + int((hO / 2))
-                print("Center Objetc:", centerXO)
+                print("Center Objetc:", centerXO, centerYO)
                 
             # Draw small white circle on the center of object; this is the object tracker!
-            cv2.circle(frame, (centerXO, centerYO), 10, magenta, -1)
-            
+            cv2.circle(frame_current, (centerXO, centerYO), 10, magenta, -1)
             robot_movement(centerXO, centerYO, object_held_distance)
 
         # Places line at the horizon (for our reference)
         cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
         frame = cv2.flip(frame, 1)
-        cv2.imshow("frame_blurred", frame)
+
+        cv2.imshow("mask_frame", frame) # Shows colour mask
+        cv2.imshow("frame_current", frame_current) # Shows current frame w/ dot on object
 
         # Press 'q' to exit the loop
         if cv2.waitKey(1) == ord('q'):
             fc.stop()
             break
-
-    # For Martina:
-    # centerXO, centerYO
