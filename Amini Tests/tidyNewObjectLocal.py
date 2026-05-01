@@ -12,7 +12,7 @@ blue = (255, 0, 0)
 black = (0, 0, 0)
 
 # ==Camera (incl. its width and height) initialisation==
-capture = cv2.VideoCapture(2)
+capture = cv2.VideoCapture(1)
 width  = capture.get(3) 
 height = capture.get(4)
 blurSize = 0
@@ -62,6 +62,8 @@ interval_obj_id = 3 # how long an object should be in frame before it is IDed as
 # ==Toggles==
 snapshot_diff_taken = False # becomes true once an image has been taken post-object placement
 object_identified = False # becomes true once the object has been identified
+
+xT = 180; yT = 160; wT = 50; hT = 50
 
 # Covers the image with rectnagles so that only the object is visible
 def hide_background(image, xO, yO, wO, hO):
@@ -135,7 +137,7 @@ while True: # Runs until key is pressed to close
             snapshot_diff_taken = True
 
             # Initialises default distance from object to centre of horizon
-            lowestDis = 1000
+            lowestDis = 10000000
 
             # For each contour, make a bounding box
             for i in contours:
@@ -206,7 +208,8 @@ while True: # Runs until key is pressed to close
         color_area_num = len(fg_contours)
 
         # Initialises default distance from contours to known centre of object
-        lowestDis = 1000
+        lowestDis = 100000000
+
         if color_area_num > 0:
             for i in fg_contours:
                 # x, y are the top left coords, w, h are the width and height (of the contour)

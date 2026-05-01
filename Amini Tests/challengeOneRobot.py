@@ -123,7 +123,7 @@ def color_detect(img, color_name):
     mask = cv2.inRange(hsv, np.array([min(color_dict[color_type]), 60, 0]), np.array([max(color_dict[color_type]), 255, 255]) )           # inRange()：Make the ones between lower/upper white, and the rest black
     
     if color_type == 'red':
-            mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0], 128, 0), (color_dict['red_2'][1], 255, 128)) 
+            mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0], 128, 255), (color_dict['red_2'][1], 128, 255)) 
             mask = cv2.bitwise_or(mask, mask_2)
 
     # Find the contour in mask, and the contours are arranged according to the area from small to large.
