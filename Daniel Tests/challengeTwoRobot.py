@@ -188,9 +188,7 @@ with Picamera2() as camera:
             cv2.imshow("difference", difference)
             difference_greyscale = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
             _, difference_mask = cv2.threshold(difference_greyscale, threshold_diff_value, 255, cv2.THRESH_BINARY)
-            cv2.imshow("sdfsd", snapshot_diff)
-            #cv2.imshow("sdfghsd", background_initial)
-            cv2.imshow("difference_mask", difference_mask)
+            #cv2.imshow("difference_mask", difference_mask)
 
             # ==DIFFERENCE==
             # Erosion and dilation removes noise and thin foreground elements in mask
@@ -244,6 +242,18 @@ with Picamera2() as camera:
                             #object_held_distance = math.sqrt(centerXO ** 2 + centerYO ** 2)
                             print("Maintain object distance at:", object_held_distance, "pls. Thank you.")
                             object_identified = True # An object has been found, so this is now True
+
+                            masked = cv2.bitwise_and(snapshot_diff, snapshot_diff, mask = difference_mask)
+                            #cv2.rectangle(masked, (x, y), (x+w, y+h), (255,0,0), 2)
+                            #cv2.imshow("sadasd", masked)
+
+                            objCrop = masked[y:y+h, x:x+w]
+                            objCrop = cv2.blur(objCrop, (w,h))
+                            #cv2.imshow("Crop", objCrop)
+                            objCrop = cv2.cvtColor(objCrop, cv2.COLOR_BGR2LAB)
+
+                            objCol = objCrop[w//2, h//2]
+                            print(objCol)
 
             else:
                 print("No object found :( pls try again.")          
@@ -324,7 +334,7 @@ with Picamera2() as camera:
         # Places line at the horizon (for our reference)
         cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
         frame = cv2.flip(frame, 1)
-        
+
         cv2.imshow("mask_frame", frame) # Shows colour mask
         cv2.imshow("frame_current", frame_current) # Shows current frame w/ dot on object
         # Press 'q' to exit the loop
