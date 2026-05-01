@@ -57,7 +57,8 @@ object_identified = False # becomes true once the object has been identified
 speed = 40
 interval_turn = 0.1 # Time spent turning
 object_held_distance = 350 # Distance to maintain from object
-object_distance_margin = 100
+object_distance_margin = 75
+object_angle_margin = 15
 
 def robot_movement(centerXO, centerYO, object_held_distance):
         # Object Distance Calculations
@@ -65,7 +66,6 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         vertical_distance_object = height - centerYO
         pixel_distance_to_object = math.sqrt(horizontal_distance_object ** 2 + vertical_distance_object ** 2)
         object_angle = int(math.degrees(math.asin(horizontal_distance_object / pixel_distance_to_object))  ) 
-        object_angle_margin = 15
 
         # Exponential ratio for pixel distance
         ratio = 1.5
@@ -73,11 +73,12 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         difference_in_distance = distance_to_object - object_held_distance
 
         # Defining turning speed
-        if object_angle < 25: turning_speed = 10
-        else: turning_speed = min(80, np.interp(abs(object_angle), [15, 50], [1, 70]))
+        #if object_angle < 30: turning_speed = 2
+        #else:
+        turning_speed = min(80, np.interp(abs(object_angle), [15, 50], [1, 5]))
         
         # Defining forward speed
-        foward_speed = min(120, abs(difference_in_distance / 1.2))
+        forward_speed = min(120, abs(difference_in_distance / 1.2))
 
         print(" ")
         print("==Distance Stats==")
@@ -88,9 +89,13 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         print("difference_in_distance", difference_in_distance)
         print("Object angle", object_angle)
         print("turning_speed", turning_speed)
-        print("foward_speed", foward_speed)
+        print("forward_speed", forward_speed)
 
-        if object_angle < -(object_angle_margin):
+        if difference_in_distance < -(object_distance_margin): 
+            print("object close")
+            fc.backward(forward_speed)
+        
+        elif object_angle < -(object_angle_margin):
             fc.turn_left(turning_speed)
             print("turn left")
 
@@ -100,11 +105,7 @@ def robot_movement(centerXO, centerYO, object_held_distance):
 
         elif difference_in_distance > object_distance_margin: 
             print("object far")
-            fc.forward(foward_speed)
-
-        elif difference_in_distance < -(object_distance_margin): 
-            print("object close")
-            fc.backward(foward_speed)
+            fc.forward(forward_speed)
 
         else: 
             print("object distance is perfect :)")
@@ -123,7 +124,7 @@ def color_detect(img, color_name):
     mask = cv2.inRange(hsv, np.array([min(color_dict[color_type]), 60, 0]), np.array([max(color_dict[color_type]), 255, 255]) )           # inRange()：Make the ones between lower/upper white, and the rest black
     
     if color_type == 'red':
-            mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0], 128, 255), (color_dict['red_2'][1], 128, 255)) 
+            mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0], 25, 255), (color_dict['red_2'][1], 25, 255)) 
             mask = cv2.bitwise_or(mask, mask_2)
 
     # Find the contour in mask, and the contours are arranged according to the area from small to large.
