@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-def floorMasker(frame):
+def floorMasker(refFrame, frame):
 
     width = frame.shape[1]
     height = frame.shape[0]
@@ -16,8 +16,8 @@ def floorMasker(frame):
     blurWidth = (x2-x1)//4
     blurHeight = (y2-y1)//4
 
-    # Creates the frame for floor detection
-    floorReg = frame[y1:y2, x1:x2]
+    # Creates the reference frame for floor detection
+    floorReg = refFrame[y1:y2, x1:x2]
     floorReg = cv2.resize(floorReg, (blurWidth, blurHeight), interpolation=cv2.INTER_LINEAR)
     blur = cv2.blur(floorReg,(blurWidth,blurHeight))
     floorColLAB = cv2.cvtColor(blur, cv2.COLOR_BGR2LAB)
@@ -33,8 +33,8 @@ def floorMasker(frame):
     blurFrame = cv2.cvtColor(cv2.merge([lblur,a,b]), cv2.COLOR_LAB2BGR)
 
     # Sets the floor color detection bounds
-    lowerFloor = np.array([min(40, int(floorPixLAB[0]-5)), int(floorPixLAB[1])-17, int(floorPixLAB[2])-17])
-    upperFloor = np.array([max(253, int(floorPixLAB[0]+5)), int(floorPixLAB[1])+17, int(floorPixLAB[2])+17])
+    lowerFloor = np.array([min(40, int(floorPixLAB[0]-5)), int(floorPixLAB[1])-15, int(floorPixLAB[2])-15])
+    upperFloor = np.array([max(253, int(floorPixLAB[0]+5)), int(floorPixLAB[1])+15, int(floorPixLAB[2])+15])
 
     # Creates an image mask based off of the frame with blurred Lightness
     mask = cv2.inRange(cv2.cvtColor(blurFrame, cv2.COLOR_BGR2LAB), lowerFloor, upperFloor)
@@ -66,6 +66,8 @@ x2 = int(width - width//8)
 y1 = int(height - height//5)
 y2 = int(height)
 
+ret, refFrame = cam.read()
+
 
 while True:
 
@@ -78,7 +80,7 @@ while True:
     frame = cv2.GaussianBlur(frame, (25,25), 8)
 
     # Returns the floor detection mask and the "average" floor color in BGR and LAB
-    mask, floorColPix, floorpixLAB = floorMasker(frame)
+    mask, floorColPix, floorpixLAB = floorMasker(refFrame, frame)
 
     # Uncomment to draw rectangle around floor detect region
     cv2.rectangle(frame, (x1,y1), (x2,y2), (int(floorColPix[0]), int(floorColPix[1]), int(floorColPix[2])),3)
