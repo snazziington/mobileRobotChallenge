@@ -12,7 +12,7 @@ blue = (255, 0, 0)
 black = (0, 0, 0)
 
 # ==Camera (incl. its width and height) initialisation==
-capture = cv2.VideoCapture(1)
+capture = cv2.VideoCapture(0)
 width  = capture.get(3) 
 height = capture.get(4)
 blurSize = 0
@@ -105,22 +105,18 @@ def robot_movement(centerXO, centerYO, object_held_distance):
 
 xT = 180; yT = 160; wT = 50; hT = 50
 
-color_dict = {'red':[0, 4], 'orange':[5, 18], 'yellow':[22, 37], 'green':[42, 85], 'blue':[92, 110], 'purple':[115, 165], 'red_2':[165, 180]}  #Here is the range of H in the HSV color space represented by the color
-
-def color_detect(img, color_name):
+def color_detect(img, color):
     # The blue range will be different under different lighting conditions and can be adjusted flexibly.  H: chroma, S: saturation v: lightness
     resize_img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)  # In order to reduce the amount of calculation, the size of the picture is reduced to (160, 120)
-    hsv = cv2.cvtColor(resize_img, cv2.COLOR_BGR2HSV)              # Convert from BGR to HSV
-    color_type = color_name
+    colLAB = cv2.cvtColor(resize_img, cv2.COLOR_BGR2LAB)              # Convert from BGR to HSV
     
-    mask = cv2.inRange(hsv, np.array([min(color_dict[color_type]), 60, 0]), np.array([max(color_dict[color_type]), 255, 255]) )           # inRange()：Make the ones between lower/upper white, and the rest black
-    if color_type == 'red':
-            mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0], 128, 0), (color_dict['red_2'][1], 255, 128)) 
-            mask = cv2.bitwise_or(mask, mask_2)
+    print(color)
+
+    mask = cv2.inRange(colLAB, np.array([color[0] - 30, color[1] - 15, color[2] - 15]), np.array([color[0] + 30, color[1] + 15, color[2] + 15]))           # inRange()：Make the ones between lower/upper white, and the rest black
 
     # Find the contour in mask, and the contours are arranged according to the area from small to large.
     _tuple = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)      
-    # compatible with opencv3.x and openc4.x
+    
     if len(_tuple) == 3:
         _, contours, hierarchy = _tuple
     else:
@@ -134,7 +130,7 @@ def color_detect(img, color_name):
 
             # Draw a rectangle on the image (picture, upper left corner coordinate, lower right corner coordinate, color, line width)
             cv2.rectangle(img, (x, y), (x+ w, y+ h), (0, 255, 0), 2)  # Draw a rectangular frame
-            cv2.putText(img, color_type, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)# Add character description
+            #cv2.putText(img, color_type, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)# Add character description
 
     return mask
 
@@ -247,21 +243,21 @@ while True: # Runs until key is pressed to close
     
     # Tracks Object
     if object_identified == True:
-        red_mask = color_detect(frame, 'red')  # Color detection function
-        cv2.imshow("red_mask", red_mask)    # OpenCV image show
+        colorMask = color_detect(frame, objCol)  # Color detection function
+        cv2.imshow("Color Mask", colorMask)    # OpenCV image show
     
         # Finds contours of the moving objects
-        red_contours, hierarchy = cv2.findContours(red_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        colorContours, hierarchy = cv2.findContours(colorMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         filter_contours = [] 
 
         # Count the number of contours in the mask
-        color_area_num = len(red_contours)
+        color_area_num = len(colorContours)
 
         # Initialises default distance from contours to known centre of object
         lowestDis = 100000000
 
         if color_area_num > 0:
-            for i in red_contours:
+            for i in colorContours:
                 # x, y are the top left coords, w, h are the width and height (of the contour)
                 x, y, w, h = cv2.boundingRect(i)
 
