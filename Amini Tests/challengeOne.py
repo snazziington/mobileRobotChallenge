@@ -9,11 +9,6 @@ import sys
 import tty
 import termios
 
-# TODO
-    # Maybe it should wait until the object has been "still" for 3 seconds before it is locked in as the object?
-
-# TODO: Filter out contours that are too big
-
 # ==Colours==
 red = (0, 0, 255)
 green = (0, 255, 0)
@@ -30,25 +25,12 @@ blurArea = (15, 15)
 
 # ==Object Following Variables==
 # size of edge margin for the object view
-margin = 50 # bigger means code can find object if the "eye" gets lost
+margin = 400 # bigger means code can find object if the "eye" gets lost
              # smaller means less distractions, but it could lose the object
 
 # how quickly the position and size of the object updates (0 < speed =< 1)
 speed_position = 0.5
 speed_size = 0.3
-
-# ==Foreground (FG) Mask Initialisation (detects movement)==
-learning_rate = 0.01
-parser = argparse.ArgumentParser(description='This program shows how to use background subtraction methods provided by \
-                                              Opencv2. You can process both videos and images.')
-parser.add_argument('--input', type=str, help='Path to a video or a sequence of image.', default='vtest.avi')
-parser.add_argument('--algo', type=str, help='Background subtraction method (KNN, MOG2).', default='MOG2')
-args = parser.parse_args()
-
-if args.algo == 'MOG2':
-    backSub = cv2.createBackgroundSubtractorMOG2()
-else:
-    backSub = cv2.createBackgroundSubtractorKNN()
 
 # ==Camera Properties; resized dimensions, horizon, center of floor==
 resizeFactor = 4 # Camera resolution is divided by this number
@@ -72,45 +54,63 @@ interval_obj_id = 3 # how long an object should be in frame before it is IDed as
 snapshot_diff_taken = False # becomes true once an image has been taken post-object placement
 object_identified = False # becomes true once the object has been identified
 
-# Covers the image with rectnagles so that only the object is visible
+# Covers the image with rectangles so that only the object is visible
 def hide_background(image, xO, yO, wO, hO):
     cv2.rectangle(image, (0, 0), (max(0, xO - margin), height), black, -1) # left
     cv2.rectangle(image, (xO + wO + margin, 0), (width, height), black, -1) # right
     cv2.rectangle(image, (0, 0), (width, horizon), black, -1) # top
     cv2.rectangle(image, (0, yO + hO + margin), (width, height), black, -1) # bottom
 
+# Robot Movement
 speed = 40
-interval_turn = 0.1
+interval_turn = 0.1 # Time spent turning
+object_held_distance = 350 # Distance to maintain from object
 
 def robot_movement(centerXO, centerYO, object_held_distance):
-        distance_to_object = math.sqrt(centerXO ** 2 + centerYO ** 2)
-        difference_in_distance = object_held_distance - distance_to_object
+        # Object Distance Calculations
+        horizontal_distance_object = width / 2 - centerXO
+        vertical_distance_object = height - centerYO
+        pixel_distance_to_object = math.sqrt(horizontal_distance_object ** 2 + vertical_distance_object ** 2)
+        object_angle = int(math.degrees(math.asin(horizontal_distance_object / pixel_distance_to_object))  ) 
+
+        # Exponential ratio for pixel distance
+        ratio = 1.5
+        distance_to_object = pixel_distance_to_object ** ratio
+        difference_in_distance = distance_to_object - object_held_distance
+
+        # Defining turning speed
+        if object_angle < 25: turning_speed = 10
+        else: turning_speed = min(80, np.interp(abs(object_angle), [15, 50], [1, 70]))
+        
+        # Defining forward speed
+        foward_speed = min(120, abs(difference_in_distance / 1.5))
 
         print(" ")
         print("==Distance Stats==")
+        print("Vertical distance:", vertical_distance_object)
+        print("Horizontal distance:", horizontal_distance_object)
         print("object_held_distance", object_held_distance)
         print("distance_to_object", distance_to_object)
         print("difference_in_distance", difference_in_distance)
+        print("Object angle", object_angle)
+        print("turning_speed", turning_speed)
+        print("foward_speed", foward_speed)
 
-        if centerXO >= width / 2 + 50:
-            turn_timer = time.time()
-            while time.time() - turn_timer < interval_turn:
-                fc.turn_left(speed)
-            fc.stop()
+        if object_angle < -15:
+            fc.turn_left(turning_speed)
+            print("turn left")
 
-        elif centerXO <= width / 2 - 50:
-            turn_timer = time.time()
-            while time.time() - turn_timer < interval_turn:
-                fc.turn_right(speed)
-            fc.stop()
+        elif object_angle > 15:
+            fc.turn_right(turning_speed)
+            print("turn right")
 
-        if difference_in_distance > 15: 
+        elif difference_in_distance > 15: 
             print("object far")
-            #fc.forward(speed)
+            fc.forward(foward_speed)
 
         elif difference_in_distance < -15: 
             print("object close")
-            #fc.backward(speed)
+            fc.backward(foward_speed)
 
         else: 
             print("object distance is perfect :)")
@@ -118,26 +118,21 @@ def robot_movement(centerXO, centerYO, object_held_distance):
 
 xT = 180; yT = 160; wT = 50; hT = 50
 
-color_dict = {'red':[0,4],'orange':[5,18],'yellow':[22,37],'green':[42,85],'blue':[92,110],'purple':[115,165],'red_2':[165,180]}  #Here is the range of H in the HSV color space represented by the color
-
-kernel_5 = np.ones((5,5),np.uint8) #Define a 5×5 convolution kernel with element values of all 1.
+color_dict = {'red':[0, 4], 'orange':[5, 18], 'yellow':[22, 37], 'green':[42, 85], 'blue':[92, 110], 'purple':[115, 165], 'red_2':[165, 180]}  #Here is the range of H in the HSV color space represented by the color
 
 def color_detect(img, color_name):
-
     # The blue range will be different under different lighting conditions and can be adjusted flexibly.  H: chroma, S: saturation v: lightness
-    resize_img = cv2.resize(img, (160,120), interpolation=cv2.INTER_LINEAR)  # In order to reduce the amount of calculation, the size of the picture is reduced to (160,120)
+    resize_img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)  # In order to reduce the amount of calculation, the size of the picture is reduced to (160, 120)
     hsv = cv2.cvtColor(resize_img, cv2.COLOR_BGR2HSV)              # Convert from BGR to HSV
     color_type = color_name
     
-    mask = cv2.inRange(hsv,np.array([min(color_dict[color_type]), 60, 60]), np.array([max(color_dict[color_type]), 255, 255]) )           # inRange()：Make the ones between lower/upper white, and the rest black
+    mask = cv2.inRange(hsv, np.array([min(color_dict[color_type]), 60, 0]), np.array([max(color_dict[color_type]), 255, 255]) )           # inRange()：Make the ones between lower/upper white, and the rest black
     if color_type == 'red':
-            mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0],0,0), (color_dict['red_2'][1],255,255)) 
+            mask_2 = cv2.inRange(hsv, (color_dict['red_2'][0], 128, 0), (color_dict['red_2'][1], 255, 128)) 
             mask = cv2.bitwise_or(mask, mask_2)
 
-    morphologyEx_img = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_5,iterations=1)              # Perform an open operation on the image 
-
-    # Find the contour in morphologyEx_img, and the contours are arranged according to the area from small to large.
-    _tuple = cv2.findContours(morphologyEx_img,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)      
+    # Find the contour in mask, and the contours are arranged according to the area from small to large.
+    _tuple = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)      
     # compatible with opencv3.x and openc4.x
     if len(_tuple) == 3:
         _, contours, hierarchy = _tuple
@@ -148,21 +143,16 @@ def color_detect(img, color_name):
 
     if color_area_num > 0: 
         for i in contours:    # Traverse all contours
-            x,y,w,h = cv2.boundingRect(i)      # Decompose the contour into the coordinates of the upper left corner and the width and height of the recognition object
+            x, y, w, h = cv2.boundingRect(i)      # Decompose the contour into the coordinates of the upper left corner and the width and height of the recognition object
 
             # Draw a rectangle on the image (picture, upper left corner coordinate, lower right corner coordinate, color, line width)
-            if w >= 8 and h >= 8: # Because the picture is reduced to a quarter of the original size, if you want to draw a rectangle on the original picture to circle the target, you have to multiply x, y, w, h by 4.
-                x = x * 4
-                y = y * 4 
-                w = w * 4
-                h = h * 4
-                cv2.rectangle(img,(x,y),(x+w,y+h),(0,255,0),2)  # Draw a rectangular frame
-                cv2.putText(img,color_type,(x,y), cv2.FONT_HERSHEY_SIMPLEX, 1,(0,0,255),2)# Add character description
+            cv2.rectangle(img, (x, y), (x+ w, y+ h), (0, 255, 0), 2)  # Draw a rectangular frame
+            cv2.putText(img, color_type, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)# Add character description
 
-    return img,mask,morphologyEx_img
+    return mask
 
 with Picamera2() as camera:
-    camera.preview_configuration.main.size = (320, 240)
+    camera.preview_configuration.main.size = (640, 480)
     camera.preview_configuration.main.format = "RGB888"
     camera.preview_configuration.align()
     camera.configure("preview")
@@ -207,19 +197,19 @@ with Picamera2() as camera:
                 snapshot_diff = cv2.GaussianBlur(snapshot_diff, blurArea, blurSize)
                 print("'O' key pressed. Detecting object in the current snapshot...")
             
-            # Compares difference between initial background photo and current view,
+            # Compares difference between initial background photo and current view, 
             # then apply greyscale and apply binary filter (based on threshold value)
             difference = cv2.absdiff(background_initial, snapshot_diff)
             #cv2.imshow("difference", difference)
             difference_greyscale = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
             _, difference_mask = cv2.threshold(difference_greyscale, threshold_diff_value, 255, cv2.THRESH_BINARY)
-            cv2.imshow("difference_mask", difference_mask)
+            #cv2.imshow("difference_mask", difference_mask)
 
             # ==DIFFERENCE==
             # Erosion and dilation removes noise and thin foreground elements in mask
-            difference_mask = cv2.erode(difference_mask, np.ones((2, 2), np.uint8), iterations = 3)
+            difference_mask = cv2.erode(difference_mask, np.ones((2, 2), np.uint8), iterations = 2)
             difference_mask = cv2.dilate(difference_mask, np.ones((4, 4), np.uint8), iterations = 2)
-            cv2.imshow("difference_mask_processed", difference_mask)
+            #cv2.imshow("difference_mask_processed", difference_mask)
 
             # Find contours from the resultant mask
             contours, hierarchy = cv2.findContours(difference_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -250,7 +240,7 @@ with Picamera2() as camera:
                         # Calculate its distance to the center of the floor
                         centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
                         
-                        # Find the contour on the floor with the centre-most dimensions,
+                        # Find the contour on the floor with the centre-most dimensions, 
                         # and save them into the global variables
                         if (centerDis < lowestDis):
                             lowestDis = centerDis
@@ -264,7 +254,7 @@ with Picamera2() as camera:
 
                             print("Object Coords:", centerXO, centerYO)
 
-                            object_held_distance = math.sqrt(centerXO ** 2 + centerYO ** 2)
+                            #object_held_distance = math.sqrt(centerXO ** 2 + centerYO ** 2)
                             print("Maintain object distance at:", object_held_distance, "pls. Thank you.")
                             object_identified = True # An object has been found, so this is now True
 
@@ -273,45 +263,21 @@ with Picamera2() as camera:
         
         # Tracks Object
         if object_identified == True:
-            # Updates the background image once "interval" time has passed
-            # This does not overwrite the original background image! Maybe it should lmao.
-            if update_bg_time + interval_bg < current_time:
-                update_bg_time = time.time()
-                background = camera.capture_array()
-                background = cv2.flip(background, 1)
-                background = cv2.resize(background, resizedDimensions, interpolation=cv2.INTER_LINEAR)
-                background_blurred = cv2.GaussianBlur(background, blurArea, blurSize)
-            
-            # Create a frame of the current object view
-            hide_background(obj_cropped_img, xO, yO, wO, hO)
-            cv2.imshow("obj_cropped_img", obj_cropped_img)
-            
-            # === FOREGROUND ====
-            # Detects changes in the camera view
-            fg = backSub.apply(frame, learningRate = learning_rate)
-            #cv2.imshow("fg", fg)
-
-            _, fg = cv2.threshold(fg, threshold_fg_value, 255, cv2.THRESH_BINARY)
-            #cv2.imshow("fg_thresh", fg)
-
-            # Removes noise/thin objects/ropes
-            fg = cv2.erode(fg, np.ones((3, 3), np.uint8), iterations = 3)
-            fg = cv2.dilate(fg, np.ones((7, 7), np.uint8), iterations = 3)
-            #hide_background(fg, xO, yO, wO, hO)
-            cv2.imshow("fg_processed", fg)
-
+            red_mask = color_detect(frame, 'red')  # Color detection function
+            cv2.imshow("red_mask", red_mask)    # OpenCV image show
+        
             # Finds contours of the moving objects
-            fg_contours, hierarchy = cv2.findContours(fg, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            red_contours, hierarchy = cv2.findContours(red_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             filter_contours = [] 
 
             # Count the number of contours in the mask
-            color_area_num = len(fg_contours)
+            color_area_num = len(red_contours)
 
             # Initialises default distance from contours to known centre of object
             lowestDis = 100000000
 
             if color_area_num > 0:
-                for i in fg_contours:
+                for i in red_contours:
                     # x, y are the top left coords, w, h are the width and height (of the contour)
                     x, y, w, h = cv2.boundingRect(i)
 
@@ -321,7 +287,7 @@ with Picamera2() as camera:
 
                     area = cv2.contourArea(i)
                     areaStr = str(cv2.contourArea(i))
-                    if centerY > horizon and w >= 10 and h >= 10 and area < 10000:
+                    if centerY > horizon:
 
                         # Calculate distance from contour to known center of object
                         centerDis = (abs(centerXO - centerX) + abs(centerYO - centerY))
@@ -370,6 +336,7 @@ with Picamera2() as camera:
 
         # Places line at the horizon (for our reference)
         cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
+        frame = cv2.flip(frame, 1)
         cv2.imshow("frame_blurred", frame)
         # Press 'q' to exit the loop
         if cv2.waitKey(1) == ord('q'):
