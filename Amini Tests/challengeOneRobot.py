@@ -57,8 +57,8 @@ object_identified = False # becomes true once the object has been identified
 speed = 40
 interval_turn = 0.1 # Time spent turning
 object_held_distance = 350 # Distance to maintain from object
-object_distance_margin = 75
-object_angle_margin = 15
+object_distance_margin = 50
+object_angle_margin = 30
 
 def robot_movement(centerXO, centerYO, object_held_distance):
         # Object Distance Calculations
@@ -75,7 +75,7 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         # Defining turning speed
         #if object_angle < 30: turning_speed = 2
         #else:
-        turning_speed = min(80, np.interp(abs(object_angle), [15, 50], [1, 5]))
+        turning_speed = min(80, np.interp(abs(object_angle), [15, 50], [1, 15]))
         
         # Defining forward speed
         forward_speed = min(120, abs(difference_in_distance / 1.2))
