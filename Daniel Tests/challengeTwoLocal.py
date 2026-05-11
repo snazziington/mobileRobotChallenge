@@ -1,58 +1,48 @@
+#import picar_4wd as fc
 import cv2
 import numpy as np
-import time
+#from picamera2 import Picamera2
 import math
 
 # ==Colours==
-red = (0, 0, 255)
-green = (0, 255, 0)
 white = (255, 255, 255)
 magenta = (255, 0, 255)
 blue = (255, 0, 0)
-black = (0, 0, 0)
 
-# ==Camera (incl. its width and height) initialisation==
-capture = cv2.VideoCapture(0)
+# ==Camera properties==
+capture = cv2.VideoCapture(1)
 width  = capture.get(3) 
 height = capture.get(4)
 blurSize = 0
 blurArea = (15, 15)
-
-# ==Object Following Variables==
-# size of edge margin for the object view
-margin = 400 # bigger means code can find object if the "eye" gets lost
-             # smaller means less distractions, but it could lose the object
-
-# how quickly the position and size of the object updates (0 < speed =< 1)
-speed_position = 0.5
-speed_size = 0.3
 
 # ==Camera Properties; resized dimensions, horizon, center of floor==
 resizeFactor = 4 # Camera resolution is divided by this number
 width = int(width / resizeFactor); height = int(height / resizeFactor)
 resizedDimensions = (width, height)
 horizon = int(height * 0.4)
+
+# A list containing the coordinates of the center of the floor
 centerFloor = [int(width / 2), int(horizon * 1.5)]
 
 # ==Threshold for difference mask==
-# This compares the previous frame to next frame (increase for less sensitivity))
-threshold_diff_value = 125
-threshold_diff_value_object = 20 # currently commented out
-
-interval_bg = 0.01 # how often the background image is updated (in seconds)
-interval_diff_bg = 0.01 # currently commented out
-interval_wait_for_object = 0.2 # length of time to wait for an object to be placed
-interval_obj_id = 3 # how long an object should be in frame before it is IDed as the object
+# Difference threshold value; decrease in rooms with warm lighting
+threshold_diff_value = 50
 
 # ==Toggles==
-snapshot_diff_taken = False # becomes true once an image has been taken post-object placement
-object_identified = False # becomes true once the object has been identified
+object_identified = False # Becomes true once the object has been identified
 
-# Robot Movement
-speed = 40
-interval_turn = 0.1 # Time spent turning
+# ==Object Tracking==
+# How quickly the position and size of the object moves towards the target (0 < speed =< 1)
+speed_position = 0.5
+speed_size = 0.3
+
+# ==Robot Movement==
 object_held_distance = 350 # Distance to maintain from object
+object_distance_margin = 50 # Margin for object distance
+object_angle_margin = 30 # Margin for angle
 
+# centerXO and centerYO are the center coordinates of the object; that is what the robot follows
 def robot_movement(centerXO, centerYO, object_held_distance):
         # Object Distance Calculations
         horizontal_distance_object = width / 2 - centerXO
@@ -65,54 +55,45 @@ def robot_movement(centerXO, centerYO, object_held_distance):
         distance_to_object = pixel_distance_to_object ** ratio
         difference_in_distance = distance_to_object - object_held_distance
 
-        # Defining turning speed
-        if object_angle < 25: turning_speed = 10
-        else: turning_speed = min(80, np.interp(abs(object_angle), [15, 50], [1, 70]))
+        # Defining turning speed; relative to angle magnitude
+        turning_speed = min(80, np.interp(abs(object_angle), [30, 50], [1, 15]))
         
-        # Defining forward speed
-        foward_speed = min(120, abs(difference_in_distance / 1.2))
+        # Defining forward speed; relative to difference in distance
+        forward_speed = min(120, abs(difference_in_distance / 1.2))
 
-        print(" ")
-        print("==Distance Stats==")
-        print("Vertical distance:", vertical_distance_object)
-        print("Horizontal distance:", horizontal_distance_object)
-        print("object_held_distance", object_held_distance)
-        print("distance_to_object", distance_to_object)
-        print("difference_in_distance", difference_in_distance)
-        print("Object angle", object_angle)
-        print("turning_speed", turning_speed)
-        print("foward_speed", foward_speed)
-
-        if object_angle < -15:
+        # Robot Movement
+        if difference_in_distance < -(object_distance_margin): 
+            print("Move backwards")
+            #fc.backward(forward_speed)
+        
+        elif object_angle < -(object_angle_margin):
             #fc.turn_left(turning_speed)
-            print("turn left")
+            print("Turn left")
 
-        elif object_angle > 15:
+        elif object_angle > object_angle_margin:
             #fc.turn_right(turning_speed)
-            print("turn right")
+            print("Turn right")
 
-        elif difference_in_distance > 15: 
-            print("object far")
-            #fc.forward(foward_speed)
-
-        elif difference_in_distance < -15: 
-            print("object close")
-            #fc.backward(foward_speed)
+        elif difference_in_distance > object_distance_margin: 
+            print("Move forward")
+            #fc.forward(forward_speed)
 
         else: 
-            print("object distance is perfect :)")
+            print("Object distance is perfect!")
             #fc.stop()
 
+# Initialises target values of object to be center of the floor
 xT = 180; yT = 160; wT = 50; hT = 50
 
-def color_detect(img, color):
-    # The blue range will be different under different lighting conditions and can be adjusted flexibly.  H: chroma, S: saturation v: lightness
-    resize_img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)  # In order to reduce the amount of calculation, the size of the picture is reduced to (160, 120)
-    colLAB = cv2.cvtColor(resize_img, cv2.COLOR_BGR2LAB)              # Convert from BGR to HSV
-    
-    print(color)
+# Margin values for the colour once detected
+colour_lightness_diff = 40
+colour_hue_diff = 6
 
-    mask = cv2.inRange(colLAB, np.array([color[0] - 30, color[1] - 15, color[2] - 15]), np.array([color[0] + 30, color[1] + 15, color[2] + 15]))           # inRange()：Make the ones between lower/upper white, and the rest black
+def color_detect(img, color):
+    # Convert from BGR to LAB
+    colLAB = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+
+    mask = cv2.inRange(colLAB, np.array([color[0] - colour_lightness_diff, color[1] - colour_hue_diff, color[2] - colour_hue_diff]), np.array([color[0] + colour_lightness_diff, color[1] + colour_hue_diff, color[2] + colour_hue_diff]))           # inRange()：Make the ones between lower/upper white, and the rest black
 
     # Find the contour in mask, and the contours are arranged according to the area from small to large.
     _tuple = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)      
@@ -130,9 +111,10 @@ def color_detect(img, color):
 
             # Draw a rectangle on the image (picture, upper left corner coordinate, lower right corner coordinate, color, line width)
             cv2.rectangle(img, (x, y), (x+ w, y+ h), (0, 255, 0), 2)  # Draw a rectangular frame
-            #cv2.putText(img, color_type, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)# Add character description
 
+    # Return a mask of all objects coloured similarly to the object
     return mask
+
 
 # Captures the first background image
 ret_bg, background_initial = capture.read()
@@ -143,33 +125,32 @@ background_initial = cv2.resize(background_initial, resizedDimensions, interpola
 background_initial = cv2.GaussianBlur(background_initial, (5, 5), 5) 
 
 while True: # Runs until key is pressed to close
-    current_time = time.time() # Updates the current time so the timer can be used
-
-    ret_bg, frame_current = capture.read()
+    # Initialise current view; will outline the object
+    ret, frame_current = capture.read()
     frame_current = cv2.flip(frame_current, 1)
     frame_current = cv2.resize(frame_current, resizedDimensions, interpolation=cv2.INTER_LINEAR)
     frame_current = cv2.GaussianBlur(frame_current, blurArea, blurSize)
-                                        
-    # Initialise current view
-    ret_bg, frame = capture.read()
+            
+    # Initialise secondary capture; will show the object tracking reticle once the object is found
+    ret, frame = capture.read()
     frame = cv2.flip(frame, 1)
     frame = cv2.resize(frame, resizedDimensions, interpolation=cv2.INTER_LINEAR)
     frame = cv2.GaussianBlur(frame, blurArea, blurSize)
 
-    # If "O" key is pressed in terminal or cv2 view
+    # If "O" key is pressed in the cv2 view
     if cv2.waitKey(1) == ord('o'):
         # Saves an image of the view so the contour of the new objects can be found
-        if snapshot_diff_taken == False:
-            ret_bg, snapshot_diff = capture.read()
+        if object_identified == False:
+            ret, snapshot_diff = capture.read()
             snapshot_diff = cv2.flip(snapshot_diff, 1)
             snapshot_diff = cv2.resize(snapshot_diff, resizedDimensions, interpolation=cv2.INTER_LINEAR)
             snapshot_diff = cv2.GaussianBlur(snapshot_diff, blurArea, blurSize)
-            print("'O' key pressed. Detecting object in the current snapshot...")
+            print("'O' key pressed. Detecting objects in the current snapshot...")
         
         # Compares difference between initial background photo and current view, 
         # then apply greyscale and apply binary filter (based on threshold value)
         difference = cv2.absdiff(background_initial, snapshot_diff)
-        cv2.imshow("difference", difference)
+        #cv2.imshow("difference", difference)
         difference_greyscale = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
         _, difference_mask = cv2.threshold(difference_greyscale, threshold_diff_value, 255, cv2.THRESH_BINARY)
         #cv2.imshow("difference_mask", difference_mask)
@@ -187,30 +168,28 @@ while True: # Runs until key is pressed to close
         color_area_num = len(contours)
         
         if color_area_num > 0:
-            print("An object has been found :)")
-            snapshot_diff_taken = True
+            # If at least one contour was found, then one of them must be the object.
+            print("An object has been found!")
 
             # Initialises default distance from object to centre of horizon
             lowestDis = 1000000
 
-            # For each contour, make a bounding box
             for i in contours:
-                # x, y are the top left coords, w, h are the width and height (of the contour)
+                # For each contour, make a bounding box
+                # # x, y are the top left coords, w, h are the width and height
                 x, y, w, h = cv2.boundingRect(i)
                 print("Coords of new objects:", x, y, w, h)
                 # Center pixels of the contour
                 centerX = x + int((w / 2))
                 centerY = y + int((h / 2))
 
-                area = w * h
-
-                # If the contour's vertical center is on the floor (below the horizon) and it's bigger than 20x20...
-                if centerY > horizon and w >= int(width / 20) and h >= int(width / 20):
+                # If the contour's vertical center is on the floor (below the horizon)...
+                if centerY > horizon:
                     # Calculate its distance to the center of the floor
                     centerDis = (abs(centerFloor[0] - centerX) + abs(centerFloor[1] - centerY))
                     
-                    # Find the contour on the floor with the centre-most dimensions, 
-                    # and save them into the global variables
+                    # The contour nearest to the center of the floor is the object
+                    # Save its coordinates in the following variables
                     if (centerDis < lowestDis):
                         lowestDis = centerDis
                         # The coordinates of the "object" are saved into these variables
@@ -221,32 +200,34 @@ while True: # Runs until key is pressed to close
                         centerXO = xO + wO // 2
                         centerYO = yO + hO // 2
 
-                        print("Object Coords:", centerXO, centerYO)
-
-                        #object_held_distance = math.sqrt(centerXO ** 2 + centerYO ** 2)
-                        print("Maintain object distance at:", object_held_distance, "pls. Thank you.")
                         object_identified = True # An object has been found, so this is now True
-                        masked = cv2.bitwise_and(snapshot_diff, snapshot_diff, mask = difference_mask)
-                        #cv2.rectangle(masked, (x, y), (x+w, y+h), (255,0,0), 2)
-                        #cv2.imshow("sadasd", masked)
 
-                        objCrop = masked[y:y+h, x:x+w]
-                        objCrop = cv2.blur(objCrop, (w,h))
+                        # Creates a mask of the object
+                        masked = cv2.bitwise_and(snapshot_diff, snapshot_diff, mask = difference_mask)
+
+                        # Crops the image of the object, blurs it, and changes colourspace to LAB
+                        objCrop = masked[y:y + h, x:x + w]
+                        objCrop = cv2.blur(objCrop, (w, h))
                         #cv2.imshow("Crop", objCrop)
                         objCrop = cv2.cvtColor(objCrop, cv2.COLOR_BGR2LAB)
 
                         objCol = objCrop[h//2, w//2]
+                        # Prints detected object colour
                         print(objCol)
 
         else:
-            print("No object found :( pls try again.")          
+            print("No object found, please try again.")             
     
     # Tracks Object
     if object_identified == True:
-        colorMask = color_detect(frame, objCol)  # Color detection function
-        cv2.imshow("Color Mask", colorMask)    # OpenCV image show
+        # Returns a mask containing all pixels coloured similarly to the object
+        colorMask = color_detect(frame, objCol)
+
+        # Dilates the mask to ensure each object is contained in one contour and not several
+        colorMask = cv2.dilate(colorMask, np.ones((4, 4), np.uint8), iterations = 8)
+        #cv2.imshow("Color Mask", colorMask)    # OpenCV image show
     
-        # Finds contours of the moving objects
+        # Finds contours of the objects
         colorContours, hierarchy = cv2.findContours(colorMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         filter_contours = [] 
 
@@ -254,7 +235,7 @@ while True: # Runs until key is pressed to close
         color_area_num = len(colorContours)
 
         # Initialises default distance from contours to known centre of object
-        lowestDis = 100000000
+        lowestDis = 1000000
 
         if color_area_num > 0:
             for i in colorContours:
@@ -265,40 +246,33 @@ while True: # Runs until key is pressed to close
                 centerX = x + int((w / 2))
                 centerY = y + int((h / 2))
 
-                area = cv2.contourArea(i)
-                areaStr = str(cv2.contourArea(i))
                 if centerY > horizon:
-
                     # Calculate distance from contour to known center of object
                     centerDis = (abs(centerXO - centerX) + abs(centerYO - centerY))
 
-                    cv2.putText(frame, areaStr, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (0, 0, 255), 1)
-                    # Find the contour with the centre nearest to the object's centre, and save them into the object variables
+                    # The contour nearest to the last known location of the object must be the object
+                    # Save the contour's coordinates into the target variables
                     if (centerDis < lowestDis):
                         lowestDis = centerDis
                         # These are the target values for the object
                         xT = x; yT = y; wT = w; hT = h
 
+                        # For the user's reference, add all the contours of eligible objects to this list
                         filter_contours.append(i)
 
-            # Draw the contours of objects below the horizon
+            # Draw the contours of objects below the horizon onto the frame
             cv2.drawContours(frame, filter_contours, -1, blue, 7)
             
-            # create black frame the size of the camera
+            # Create a black image the size of the camera and convert it to grey colourspace
             filter_contour_mask = np.zeros(frame.shape, np.uint8)
-            #filter_contour_mask = cv2.threshold(filter_contour_mask, threshold_diff_value, 255, cv2.THRESH_BINARY)
             filter_contour_mask = cv2.cvtColor(filter_contour_mask, cv2.COLOR_BGR2GRAY)
 
+            # Create a mask of all the filtered contours
             cv2.drawContours(filter_contour_mask, filter_contours, -1, white, -1) ####
-
             mask_frame = cv2.bitwise_and(frame, frame, mask = filter_contour_mask)
-            cv2.circle(mask_frame, (centerXO, centerYO), 30, magenta, 2)
 
-            #cv2.imshow("filter_contour_mask", filter_contour_mask)  
-            #cv2.imshow("mask_frame", mask_frame)
-
-            # Once the object's new position has been found, the properties of the object gradually change to
-            # those new properties
+            # Once the object's new position has been found, the properties of the object
+            # gradually move towards those new properties
             xO = int(xO + (xT - xO) * speed_position)
             yO = int(yO + (yT - yO) * speed_position)
             wO = int(wO + (wT - wO) * speed_size)
@@ -307,23 +281,21 @@ while True: # Runs until key is pressed to close
             # Updates center of the object
             centerXO = xO + int((wO / 2))
             centerYO = yO + int((hO / 2))
-            print("Center Objetc:", centerXO, centerYO)
             
-        # Draw small white circle on the center of object; this is the object tracker!
+        # Draw small pink circle on the center of object;
+        # This is the object tracker the robot is following
         cv2.circle(frame_current, (centerXO, centerYO), 10, magenta, -1)
         
+        # The robot moves as needed
         robot_movement(centerXO, centerYO, object_held_distance)
 
-    # Places line at the horizon (for our reference)
+    # Places a line at the horizon so the user knows where the robot is looking for objects
     cv2.line(frame, (0, horizon), (width, horizon), blue, 1)
-    frame = cv2.flip(frame, 1)
     
-    cv2.imshow("mask_frame", frame) # Shows colour mask
-    cv2.imshow("frame_current", frame_current) # Shows current frame w/ dot on object
+    cv2.imshow("mask_frame", frame) # Shows colour mask outlines
+    cv2.imshow("frame_current", frame_current) # Shows current frame with dot on object
+
     # Press 'q' to exit the loop
     if cv2.waitKey(1) == ord('q'):
         #fc.stop()
         break
-
-# For Martina:
-# centerXO, centerYO
