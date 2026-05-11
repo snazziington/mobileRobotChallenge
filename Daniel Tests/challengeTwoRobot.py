@@ -85,14 +85,14 @@ def robot_movement(centerXO, centerYO, object_held_distance):
 xT = 180; yT = 160; wT = 50; hT = 50
 
 # Margin values for the colour once detected
-colour_value_diff = 40
+colour_lightness_diff = 40
 colour_hue_diff = 6
 
 def color_detect(img, color):
-    # Convert from BGR to HSV
+    # Convert from BGR to LAB
     colLAB = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
 
-    mask = cv2.inRange(colLAB, np.array([color[0] - colour_value_diff, color[1] - colour_hue_diff, color[2] - colour_hue_diff]), np.array([color[0] + colour_value_diff, color[1] + colour_hue_diff, color[2] + colour_hue_diff]))           # inRange()：Make the ones between lower/upper white, and the rest black
+    mask = cv2.inRange(colLAB, np.array([color[0] - colour_lightness_diff, color[1] - colour_hue_diff, color[2] - colour_hue_diff]), np.array([color[0] + colour_lightness_diff, color[1] + colour_hue_diff, color[2] + colour_hue_diff]))           # inRange()：Make the ones between lower/upper white, and the rest black
 
     # Find the contour in mask, and the contours are arranged according to the area from small to large.
     _tuple = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)      
